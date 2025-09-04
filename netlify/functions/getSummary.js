@@ -137,7 +137,7 @@ export async function handler(event) {
       leadership:         { pct: avgSections.leadership_pct,         grade: gradeFromPct(avgSections.leadership_pct) },
     };
 
-    // 2) Bar chart perbandingan profil antar WILAYAH (hanya wilayah yang ada datanya)
+    // 2) Bar chart perbandingan profil antar WILAYAH (avg % per section per wilayah)
     const sumsByWilayah = new Map(); // w -> {count, cp, am, qm, ss, ld}
     (rows || []).forEach(r => {
       const w = (r.wilayah || '').trim() || '(Tanpa Wilayah)';
@@ -152,10 +152,11 @@ export async function handler(event) {
       s.ss += Number(r.softskill_pct || 0);
       s.ld += Number(r.leadership_pct || 0);
     });
-
+    
+    // label chart = kunci Map (wilayah yang punya data), bukan dari validasi_data
     let wilayahLabels = Array.from(sumsByWilayah.keys()).sort();
     if (wilayah) wilayahLabels = wilayahLabels.filter(w => w === wilayah);
-
+    
     const compareDatasets = {
       campus_preparation_pct: [],
       akhlak_mulia_pct: [],
@@ -163,7 +164,7 @@ export async function handler(event) {
       softskill_pct: [],
       leadership_pct: [],
     };
-
+    
     wilayahLabels.forEach(w => {
       const s = sumsByWilayah.get(w);
       const d = s?.count || 0;
@@ -174,6 +175,9 @@ export async function handler(event) {
       compareDatasets.softskill_pct.push(avg(s?.ss || 0));
       compareDatasets.leadership_pct.push(avg(s?.ld || 0));
     });
+    
+    payload.chartProfileByWilayah = { wilayahLabels, datasets: compareDatasets };
+
 
     // 3) Line chart tren 4 periode
     let trendSel = supabase

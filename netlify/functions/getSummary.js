@@ -1,4 +1,3 @@
-// netlify/functions/getSummary.js
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = 'https://dorppttdlqqtrjoastor.supabase.co';
@@ -10,6 +9,8 @@ const PERIODES = [
   'Tri Semester 2',
   'Assesment Akhir',
 ];
+
+const DEBUG = true; // sementara: biar 500 kelihatan jelas penyebabnya
 
 function gradeFromPct(p) {
   const x = Number(p) || 0;
@@ -27,37 +28,47 @@ export async function handler(event) {
       return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
-    const params = new URLSearchParams(event.queryStringParameters || {});
-    const periode = params.get('periode') || 'Assesment Awal';
-    const wilayah = params.get('wilayah') || '';       // optional
-    const q = (params.get('q') || '').trim();          // optional
-    const limit = Math.min(parseInt(params.get('limit') || '2000', 10), 5000);
+    // --- SAFE PARAM PARSING ---
+    const qsp = event.queryStringParameters || {};
+    const getParam = (k, def = '') => {
+      const v = qsp[k];
+      return (v === undefined || v === null) ? def : String(v);
+    };
+
+    let periode = getParam('periode', 'Assesment Awal');
+    const wilayah = getParam('wilayah', '');
+    const q = getParam('q', '').trim();
+    const limitRaw = parseInt(getParam('limit', '2000'), 10);
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 5000) : 2000;
+
+    // Normalisasi periode bila tidak valid (menghindari query eq ke nilai yang salah)
+    if (!PERIODES.includes(periode)) {
+      // toleransi umum typo 'Assessment' → 'Assesment'
+      if (/^assessment awal$/i.test(periode)) periode = 'Assesment Awal';
+      else periode = 'Assesment Awal';
+    }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // 0) Wilayah list (global, dari validasi_data)
+    // 0) Wilayah list dari validasi_data
     const { data: vdAll, error: vdErr } = await supabase
       .from('validasi_data')
       .select('wilayah, nama_pm, asesor');
 
     if (vdErr) {
-      console.error('validasi_data error:', vdErr);
-      return { statusCode: 500, body: JSON.stringify({ error: vdErr.message }) };
+      if (DEBUG) console.error('validasi_data error:', vdErr);
+      return { statusCode: 500, body: JSON.stringify({ error: vdErr.message, stack: vdErr.stack }) };
     }
 
     const allWilayahSet = new Set();
     let targetRows = vdAll || [];
-    if (wilayah) {
-      targetRows = targetRows.filter(r => r.wilayah === wilayah);
-    }
+    if (wilayah) targetRows = targetRows.filter(r => r.wilayah === wilayah);
     (vdAll || []).forEach(r => { if (r.wilayah) allWilayahSet.add(r.wilayah); });
     const allWilayahCount = allWilayahSet.size;
     const wilayah_list = Array.from(allWilayahSet).sort();
-
-    // total_target_pm = jumlah PM yang harus dinilai (berdasarkan validasi_data)
     const total_target_pm = targetRows.length;
 
-    // 1) Data untuk periode terpilih (table + KPI)
+    // 1) Data table + KPI (periode terpilih)
     let sel = supabase
       .from('v_penilaian_summary')
       .select(
@@ -74,8 +85,8 @@ export async function handler(event) {
 
     const { data: rows, error } = await sel;
     if (error) {
-      console.error('getSummary select error:', error);
-      return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
+      if (DEBUG) console.error('getSummary select error:', error);
+      return { statusCode: 500, body: JSON.stringify({ error: error.message, stack: error.stack }) };
     }
 
     // KPI
@@ -126,7 +137,7 @@ export async function handler(event) {
       leadership:         { pct: avgSections.leadership_pct,         grade: gradeFromPct(avgSections.leadership_pct) },
     };
 
-    // 2) Bar chart perbandingan profil antar wilayah (AVG % per section per WILAYAH)
+    // 2) Bar chart perbandingan profil antar WILAYAH (hanya wilayah yang ada datanya)
     const sumsByWilayah = new Map(); // w -> {count, cp, am, qm, ss, ld}
     (rows || []).forEach(r => {
       const w = (r.wilayah || '').trim() || '(Tanpa Wilayah)';
@@ -141,15 +152,10 @@ export async function handler(event) {
       s.ss += Number(r.softskill_pct || 0);
       s.ld += Number(r.leadership_pct || 0);
     });
-    
-    // Label = HANYA wilayah yang punya data
+
     let wilayahLabels = Array.from(sumsByWilayah.keys()).sort();
-    
-    // Jika user filter 1 wilayah, persempit
-    if (wilayah) {
-      wilayahLabels = wilayahLabels.filter(w => w === wilayah);
-    }
-    
+    if (wilayah) wilayahLabels = wilayahLabels.filter(w => w === wilayah);
+
     const compareDatasets = {
       campus_preparation_pct: [],
       akhlak_mulia_pct: [],
@@ -157,7 +163,7 @@ export async function handler(event) {
       softskill_pct: [],
       leadership_pct: [],
     };
-    
+
     wilayahLabels.forEach(w => {
       const s = sumsByWilayah.get(w);
       const d = s?.count || 0;
@@ -168,27 +174,23 @@ export async function handler(event) {
       compareDatasets.softskill_pct.push(avg(s?.ss || 0));
       compareDatasets.leadership_pct.push(avg(s?.ld || 0));
     });
-    
-    // kirim
-    // chartProfileByWilayah: { wilayahLabels, datasets: compareDatasets }
 
-
-    // 3) Line chart tren 4 periode (avg total_pct per periode, dengan filter wilayah & q)
+    // 3) Line chart tren 4 periode
     let trendSel = supabase
       .from('v_penilaian_summary')
       .select('periode, total_pct, wilayah, nama_pm')
       .in('periode', PERIODES)
-      .limit(50000); // cukup besar untuk tren
+      .limit(50000);
 
     if (wilayah) trendSel = trendSel.eq('wilayah', wilayah);
     if (q) trendSel = trendSel.ilike('nama_pm', `%${q}%`);
 
     const { data: trendRows, error: trendErr } = await trendSel;
     if (trendErr) {
-      console.error('trend select error:', trendErr);
-      return { statusCode: 500, body: JSON.stringify({ error: trendErr.message }) };
+      if (DEBUG) console.error('trend select error:', trendErr);
+      return { statusCode: 500, body: JSON.stringify({ error: trendErr.message, stack: trendErr.stack }) };
     }
-    // hitung rata-rata per periode (urut tetap)
+
     const trendTotals = PERIODES.map(label => {
       const items = (trendRows || []).filter(r => r.periode === label);
       if (!items.length) return 0;
@@ -196,12 +198,8 @@ export async function handler(event) {
       return + (sumPct / items.length).toFixed(2);
     });
 
-    // pm_names untuk autocomplete
     const pm_names = Array.from(new Set((rows || []).map(r => r.nama_pm).filter(Boolean))).sort();
 
-    const apiVersion = 'chart-wilayah-v3';
-    body: JSON.stringify({ apiVersion, ...payload })
-    
     const payload = {
       periode,
       wilayah_list,
@@ -215,13 +213,19 @@ export async function handler(event) {
       rows
     };
 
+    const apiVersion = 'chart-wilayah-v3';
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ apiVersion, ...payload })
     };
   } catch (err) {
+    // tampilkan pesan jelas ke client (sementara)
     console.error('getSummary fatal:', err);
-    return { statusCode: 500, body: JSON.stringify({ error: 'Internal error' }) };
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: String(err?.message || err), stack: err?.stack })
+    };
   }
 }

@@ -11,6 +11,16 @@ const PERIODES = [
   'Assesment Akhir',
 ];
 
+function gradeFromPct(p) {
+  const x = Number(p) || 0;
+  if (x === 100) return 'Excellent (Sempurna / Istimewa)';
+  if (x >= 90)   return 'Very Good (Baik Sekali)';
+  if (x >= 80)   return 'Good (Baik)';
+  if (x >= 70)   return 'Satisfactory (Cukup)';
+  if (x >= 50)   return 'Need Improvement (Kurang Baik)';
+  return 'Below Standard (Lemah)';
+}
+
 export async function handler(event) {
   try {
     if (event.httpMethod !== 'GET') {
@@ -19,17 +29,35 @@ export async function handler(event) {
 
     const params = new URLSearchParams(event.queryStringParameters || {});
     const periode = params.get('periode') || 'Assesment Awal';
-    const wilayah = params.get('wilayah') || ''; // optional
-    const q = (params.get('q') || '').trim();    // optional search PM
-    const limit = Math.min(parseInt(params.get('limit') || '500', 10), 2000);
-
-    if (!PERIODES.includes(periode)) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'Periode tidak valid' }) };
-    }
+    const wilayah = params.get('wilayah') || '';       // optional
+    const q = (params.get('q') || '').trim();          // optional
+    const limit = Math.min(parseInt(params.get('limit') || '2000', 10), 5000);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // Base query
+    // 0) Wilayah list (global, dari validasi_data)
+    const { data: vdAll, error: vdErr } = await supabase
+      .from('validasi_data')
+      .select('wilayah, nama_pm, asesor');
+
+    if (vdErr) {
+      console.error('validasi_data error:', vdErr);
+      return { statusCode: 500, body: JSON.stringify({ error: vdErr.message }) };
+    }
+
+    const allWilayahSet = new Set();
+    let targetRows = vdAll || [];
+    if (wilayah) {
+      targetRows = targetRows.filter(r => r.wilayah === wilayah);
+    }
+    (vdAll || []).forEach(r => { if (r.wilayah) allWilayahSet.add(r.wilayah); });
+    const allWilayahCount = allWilayahSet.size;
+    const wilayah_list = Array.from(allWilayahSet).sort();
+
+    // total_target_pm = jumlah PM yang harus dinilai (berdasarkan validasi_data)
+    const total_target_pm = targetRows.length;
+
+    // 1) Data untuk periode terpilih (table + KPI)
     let sel = supabase
       .from('v_penilaian_summary')
       .select(
@@ -46,15 +74,17 @@ export async function handler(event) {
 
     const { data: rows, error } = await sel;
     if (error) {
-      console.error('Supabase getSummary error:', error);
+      console.error('getSummary select error:', error);
       return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
     }
 
-    // KPI & agregasi
+    // KPI
     const kpis = {
       count: rows.length,
+      total_target_pm,
       avg_total_pct: 0,
-      grade_counts: {}
+      avg_grade: '-',
+      grade_counts: {},
     };
     const sum = {
       campus_preparation_pct: 0,
@@ -62,16 +92,10 @@ export async function handler(event) {
       quranic_mentorship_pct: 0,
       softskill_pct: 0,
       leadership_pct: 0,
-      total_pct: 0
+      total_pct: 0,
     };
 
-    const wilayahSet = new Set();
-    const asesorSet = new Set();
-
     rows.forEach(r => {
-      wilayahSet.add(r.wilayah);
-      asesorSet.add(`${r.wilayah}||${r.asesor}`);
-
       sum.campus_preparation_pct += Number(r.campus_preparation_pct || 0);
       sum.akhlak_mulia_pct       += Number(r.akhlak_mulia_pct || 0);
       sum.quranic_mentorship_pct += Number(r.quranic_mentorship_pct || 0);
@@ -84,8 +108,6 @@ export async function handler(event) {
     });
 
     const denom = rows.length || 1;
-    kpis.avg_total_pct = +(sum.total_pct / denom).toFixed(2);
-
     const avgSections = {
       campus_preparation_pct: +(sum.campus_preparation_pct / denom).toFixed(2),
       akhlak_mulia_pct:       +(sum.akhlak_mulia_pct / denom).toFixed(2),
@@ -93,8 +115,18 @@ export async function handler(event) {
       softskill_pct:          +(sum.softskill_pct / denom).toFixed(2),
       leadership_pct:         +(sum.leadership_pct / denom).toFixed(2),
     };
+    kpis.avg_total_pct = +(sum.total_pct / denom).toFixed(2);
+    kpis.avg_grade = gradeFromPct(kpis.avg_total_pct);
 
-    // Chart: rata-rata per section per wilayah
+    const avgSectionsWithGrade = {
+      campus_preparation: { pct: avgSections.campus_preparation_pct, grade: gradeFromPct(avgSections.campus_preparation_pct) },
+      akhlak_mulia:       { pct: avgSections.akhlak_mulia_pct,       grade: gradeFromPct(avgSections.akhlak_mulia_pct) },
+      quranic_mentorship: { pct: avgSections.quranic_mentorship_pct, grade: gradeFromPct(avgSections.quranic_mentorship_pct) },
+      softskill:          { pct: avgSections.softskill_pct,          grade: gradeFromPct(avgSections.softskill_pct) },
+      leadership:         { pct: avgSections.leadership_pct,         grade: gradeFromPct(avgSections.leadership_pct) },
+    };
+
+    // 2) Bar chart perbandingan profil antar wilayah (rata-rata % per section per wilayah)
     const perWilayahMap = new Map(); // wilayah -> accum
     rows.forEach(r => {
       if (!perWilayahMap.has(r.wilayah)) {
@@ -117,7 +149,7 @@ export async function handler(event) {
     });
 
     const wilayahLabels = [];
-    const chartDatasets = {
+    const compareDatasets = {
       campus_preparation_pct: [],
       akhlak_mulia_pct: [],
       quranic_mentorship_pct: [],
@@ -127,19 +159,49 @@ export async function handler(event) {
     for (const [w, acc] of perWilayahMap.entries()) {
       wilayahLabels.push(w);
       const d = Math.max(acc.count, 1);
-      chartDatasets.campus_preparation_pct.push(+ (acc.campus_preparation_pct / d).toFixed(2));
-      chartDatasets.akhlak_mulia_pct.push(+ (acc.akhlak_mulia_pct / d).toFixed(2));
-      chartDatasets.quranic_mentorship_pct.push(+ (acc.quranic_mentorship_pct / d).toFixed(2));
-      chartDatasets.softskill_pct.push(+ (acc.softskill_pct / d).toFixed(2));
-      chartDatasets.leadership_pct.push(+ (acc.leadership_pct / d).toFixed(2));
+      compareDatasets.campus_preparation_pct.push(+ (acc.campus_preparation_pct / d).toFixed(2));
+      compareDatasets.akhlak_mulia_pct.push(+ (acc.akhlak_mulia_pct / d).toFixed(2));
+      compareDatasets.quranic_mentorship_pct.push(+ (acc.quranic_mentorship_pct / d).toFixed(2));
+      compareDatasets.softskill_pct.push(+ (acc.softskill_pct / d).toFixed(2));
+      compareDatasets.leadership_pct.push(+ (acc.leadership_pct / d).toFixed(2));
     }
+
+    // 3) Line chart tren 4 periode (avg total_pct per periode, dengan filter wilayah & q)
+    let trendSel = supabase
+      .from('v_penilaian_summary')
+      .select('periode, total_pct, wilayah, nama_pm')
+      .in('periode', PERIODES)
+      .limit(50000); // cukup besar untuk tren
+
+    if (wilayah) trendSel = trendSel.eq('wilayah', wilayah);
+    if (q) trendSel = trendSel.ilike('nama_pm', `%${q}%`);
+
+    const { data: trendRows, error: trendErr } = await trendSel;
+    if (trendErr) {
+      console.error('trend select error:', trendErr);
+      return { statusCode: 500, body: JSON.stringify({ error: trendErr.message }) };
+    }
+    // hitung rata-rata per periode (urut tetap)
+    const trendTotals = PERIODES.map(label => {
+      const items = (trendRows || []).filter(r => r.periode === label);
+      if (!items.length) return 0;
+      const sumPct = items.reduce((s, r) => s + Number(r.total_pct || 0), 0);
+      return + (sumPct / items.length).toFixed(2);
+    });
+
+    // pm_names untuk autocomplete
+    const pm_names = Array.from(new Set((rows || []).map(r => r.nama_pm).filter(Boolean))).sort();
 
     const payload = {
       periode,
-      wilayah_list: Array.from(wilayahSet).sort(),
+      wilayah_list,
+      meta: { all_wilayah_count: allWilayahCount, periods: PERIODES },
       kpis,
       avgSections,
-      chart: { wilayahLabels, datasets: chartDatasets },
+      avgSectionsWithGrade,
+      chartTrend: { labels: PERIODES, total_pct_avg: trendTotals },
+      chartProfileByWilayah: { wilayahLabels, datasets: compareDatasets },
+      pm_names,
       rows
     };
 

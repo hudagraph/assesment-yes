@@ -129,22 +129,17 @@ function renderProfileByWilayahChart(payload) {
   const labels = payload.chartProfileByWilayah?.wilayahLabels || [];
   const ds = payload.chartProfileByWilayah?.datasets || {};
 
-  const COLORS = {
-    cp: '#F59E0B', // amber
-    am: '#3B82F6', // blue
-    qm: '#10B981', // emerald
-    ss: '#8B5CF6', // violet
-    ld: '#EF4444', // red
-  };
+  // pastikan number
+  const toNumArr = (a) => (a || []).map(x => Number(x));
 
   const data = {
     labels,
     datasets: [
-      { label: 'CP%', data: ds.campus_preparation_pct || [], backgroundColor: COLORS.cp },
-      { label: 'AM%', data: ds.akhlak_mulia_pct || [],       backgroundColor: COLORS.am },
-      { label: 'QM%', data: ds.quranic_mentorship_pct || [], backgroundColor: COLORS.qm },
-      { label: 'SS%', data: ds.softskill_pct || [],          backgroundColor: COLORS.ss },
-      { label: 'LD%', data: ds.leadership_pct || [],         backgroundColor: COLORS.ld },
+      { label: 'CP%', data: toNumArr(ds.campus_preparation_pct), backgroundColor: '#F59E0B', borderColor: '#F59E0B', borderWidth: 1 },
+      { label: 'AM%', data: toNumArr(ds.akhlak_mulia_pct),       backgroundColor: '#3B82F6', borderColor: '#3B82F6', borderWidth: 1 },
+      { label: 'QM%', data: toNumArr(ds.quranic_mentorship_pct), backgroundColor: '#10B981', borderColor: '#10B981', borderWidth: 1 },
+      { label: 'SS%', data: toNumArr(ds.softskill_pct),          backgroundColor: '#8B5CF6', borderColor: '#8B5CF6', borderWidth: 1 },
+      { label: 'LD%', data: toNumArr(ds.leadership_pct),         backgroundColor: '#EF4444', borderColor: '#EF4444', borderWidth: 1 },
     ]
   };
 
@@ -164,11 +159,12 @@ function renderProfileByWilayahChart(payload) {
       },
       plugins: {
         legend: { position: 'bottom' },
-        tooltip: { callbacks: { label: (c) => `${c.dataset.label} ${fmtPct(c.parsed.y)}` } }
+        tooltip: { callbacks: { label: (c) => `${c.dataset.label} ${Number(c.parsed.y).toFixed(2)}%` } }
       }
     }
   });
 }
+
 
 // =============================
 // Tabel

@@ -127,53 +127,47 @@ export async function handler(event) {
     };
 
     // 2) Bar chart perbandingan profil antar wilayah (AVG % per section per WILAYAH)
-const sumsByWilayah = new Map(); // w -> {count, cp, am, qm, ss, ld}
-(rows || []).forEach(r => {
-  const w = r.wilayah || '(Tidak ada wilayah)';
-  if (!sumsByWilayah.has(w)) {
-    sumsByWilayah.set(w, { count: 0, cp: 0, am: 0, qm: 0, ss: 0, ld: 0 });
-  }
-  const s = sumsByWilayah.get(w);
-  s.count += 1;
-  s.cp += Number(r.campus_preparation_pct || 0);
-  s.am += Number(r.akhlak_mulia_pct || 0);
-  s.qm += Number(r.quranic_mentorship_pct || 0);
-  s.ss += Number(r.softskill_pct || 0);
-  s.ld += Number(r.leadership_pct || 0);
-});
-
-// Tentukan label wilayah untuk chart.
-// Jika user memilih filter 'wilayah', tampilkan hanya wilayah itu.
-// Jika tidak ada filter, gunakan seluruh daftar wilayah dari validasi_data (agar urutan konsisten).
-let wilayahLabels;
-if (wilayah) {
-  wilayahLabels = [wilayah];
-} else {
-  const setAll = new Set((vdAll || []).map(v => v.wilayah).filter(Boolean));
-  wilayahLabels = Array.from(setAll).sort();
-}
-
-const compareDatasets = {
-  campus_preparation_pct: [],
-  akhlak_mulia_pct: [],
-  quranic_mentorship_pct: [],
-  softskill_pct: [],
-  leadership_pct: [],
-};
-
-// Bangun data rata-rata per label
-wilayahLabels.forEach(w => {
-  const s = sumsByWilayah.get(w);
-  const d = s?.count || 0;
-  const avg = (v) => +( (d ? v/d : 0).toFixed(2) );
-  compareDatasets.campus_preparation_pct.push(avg(s?.cp || 0));
-  compareDatasets.akhlak_mulia_pct.push(avg(s?.am || 0));
-  compareDatasets.quranic_mentorship_pct.push(avg(s?.qm || 0));
-  compareDatasets.softskill_pct.push(avg(s?.ss || 0));
-  compareDatasets.leadership_pct.push(avg(s?.ld || 0));
-});
-
-
+    const sumsByWilayah = new Map(); // w -> {count, cp, am, qm, ss, ld}
+    (rows || []).forEach(r => {
+      const w = (r.wilayah || '').trim() || '(Tanpa Wilayah)';
+      if (!sumsByWilayah.has(w)) {
+        sumsByWilayah.set(w, { count: 0, cp: 0, am: 0, qm: 0, ss: 0, ld: 0 });
+      }
+      const s = sumsByWilayah.get(w);
+      s.count += 1;
+      s.cp += Number(r.campus_preparation_pct || 0);
+      s.am += Number(r.akhlak_mulia_pct || 0);
+      s.qm += Number(r.quranic_mentorship_pct || 0);
+      s.ss += Number(r.softskill_pct || 0);
+      s.ld += Number(r.leadership_pct || 0);
+    });
+    
+    // Label = hanya wilayah yang PUNYA data di periode/filter ini
+    let wilayahLabels = Array.from(sumsByWilayah.keys()).sort();
+    
+    // Jika user memilih 1 wilayah, persempit ke satu label
+    if (wilayah) {
+      wilayahLabels = wilayahLabels.filter(w => w === wilayah);
+    }
+    
+    const compareDatasets = {
+      campus_preparation_pct: [],
+      akhlak_mulia_pct: [],
+      quranic_mentorship_pct: [],
+      softskill_pct: [],
+      leadership_pct: [],
+    };
+    
+    wilayahLabels.forEach(w => {
+      const s = sumsByWilayah.get(w);
+      const d = s?.count || 0;
+      const avg = v => Number(d ? (v / d).toFixed(2) : 0);
+      compareDatasets.campus_preparation_pct.push(avg(s?.cp || 0));
+      compareDatasets.akhlak_mulia_pct.push(avg(s?.am || 0));
+      compareDatasets.quranic_mentorship_pct.push(avg(s?.qm || 0));
+      compareDatasets.softskill_pct.push(avg(s?.ss || 0));
+      compareDatasets.leadership_pct.push(avg(s?.ld || 0));
+    });
 
     // 3) Line chart tren 4 periode (avg total_pct per periode, dengan filter wilayah & q)
     let trendSel = supabase

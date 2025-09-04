@@ -37,7 +37,8 @@ export async function handler(event) {
 
   try {
     const params = new URLSearchParams(event.queryStringParameters || {});
-    const periode = params.get('periode') || 'Assesment Awal';
+    const periode = params.get('periode') || '';
+    const periode = rawPeriode.trim();
     const wilayahFilter = params.get('wilayah') || ''; // opsional
     const q = (params.get('q') || '').trim();          // opsional
     const limit = Math.min(parseInt(params.get('limit') || '5000', 10), 50000);
@@ -76,7 +77,8 @@ export async function handler(event) {
       .eq('periode', periode)
       .limit(limit);
 
-    if (wilayahFilter) sel = sel.eq('wilayah', wilayahFilter);
+    if (periode) sel = sel.eq('periode', periode);   // <-- hanya filter kalau ada
+    if (wilayah) sel = sel.eq('wilayah', wilayah);
     if (q) sel = sel.ilike('nama_pm', `%${q}%`);
 
     const { data: rows, error } = await sel;
@@ -85,15 +87,16 @@ export async function handler(event) {
       return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
     }
 
-    // ---------- KPI basic ----------
+    // KPI
     const kpis = {
-      count: rows.length,
-      total_target_pm,
+      count: 0,                // jumlah PM yang punya data sesuai filter
+      total_target_pm,         // dari validasi_data (sudah ada di kode kamu)
       avg_total_pct: 0,
       avg_grade: '-',
       grade_counts: {},
     };
-
+    
+    // agregasi rata-rata sederhana across rows
     const sum = {
       campus_preparation_pct: 0,
       akhlak_mulia_pct: 0,
@@ -102,7 +105,7 @@ export async function handler(event) {
       leadership_pct: 0,
       total_pct: 0,
     };
-
+    
     rows.forEach(r => {
       sum.campus_preparation_pct += Number(r.campus_preparation_pct || 0);
       sum.akhlak_mulia_pct       += Number(r.akhlak_mulia_pct || 0);
@@ -110,12 +113,17 @@ export async function handler(event) {
       sum.softskill_pct          += Number(r.softskill_pct || 0);
       sum.leadership_pct         += Number(r.leadership_pct || 0);
       sum.total_pct              += Number(r.total_pct || 0);
-
+    
       const g = r.grade || 'Unknown';
       kpis.grade_counts[g] = (kpis.grade_counts[g] || 0) + 1;
     });
-
-    const denom = rows.length || 1;
+    
+    // jika semua periode, kpis.count = jumlah PM unik; jika 1 periode, sama saja aman
+    const uniquePM = new Set((rows || []).map(r => r.nama_pm).filter(Boolean));
+    kpis.count = uniquePM.size;
+    
+    // rata-rata
+    const denom = (rows.length || 1);
     const avgSections = {
       campus_preparation_pct: +(sum.campus_preparation_pct / denom).toFixed(2),
       akhlak_mulia_pct:       +(sum.akhlak_mulia_pct / denom).toFixed(2),
@@ -125,7 +133,7 @@ export async function handler(event) {
     };
     kpis.avg_total_pct = +(sum.total_pct / denom).toFixed(2);
     kpis.avg_grade = gradeFromPct(kpis.avg_total_pct);
-
+    
     const avgSectionsWithGrade = {
       campus_preparation: { pct: avgSections.campus_preparation_pct, grade: gradeFromPct(avgSections.campus_preparation_pct) },
       akhlak_mulia:       { pct: avgSections.akhlak_mulia_pct,       grade: gradeFromPct(avgSections.akhlak_mulia_pct) },

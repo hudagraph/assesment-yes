@@ -292,7 +292,7 @@
     const searchPm   = $('searchPm');
   
     btnRefresh?.addEventListener('click', refreshDashboard);
-    if (btnReset) btnReset.addEventListener('click', resetFilters);
+    btnReset?.addEventListener('click', resetFilters);
     periodeSel?.addEventListener('change', refreshDashboard);
     wilayahSel?.addEventListener('change', refreshDashboard);
   

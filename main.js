@@ -180,17 +180,44 @@ async function handleSubmit(e) {
   const payload = {
     pm: data.get("pm"),
     wilayah: data.get("wilayah"),
-    asesor: data.get("asesor"), // ini adalah asesorField yang sudah auto-isi & disabled
+    asesor: data.get("asesor"), // dari hidden input (opsi B)
     periode: data.get("periode"),
     tanggal: data.get("tanggal"),
     nilai
   };
 
-  // Validasi minimal
   if (!payload.wilayah || !payload.asesor || !payload.pm || !payload.periode || !payload.tanggal) {
     alert("Semua field utama wajib diisi!");
     return;
   }
+
+  // >>> PRE-CHECK: apakah data sudah ada?
+  try {
+    const qs = new URLSearchParams({
+      wilayah: payload.wilayah,
+      asesor: payload.asesor,
+      pm: payload.pm,
+      periode: payload.periode
+    });
+    const cek = await fetch(`/.netlify/functions/checkEntry?${qs.toString()}`, { cache: 'no-store' });
+    const cekJson = await cek.json().catch(() => ({}));
+    if (cek.ok && cekJson.exists) {
+      const ok = confirm(
+        `Data untuk:
+- Wilayah: ${payload.wilayah}
+- Asesor: ${payload.asesor}
+- PM: ${payload.pm}
+- Periode: ${payload.periode}
+
+SUDAH ADA.
+Apakah Anda ingin MENGUPDATE data ini?`
+      );
+      if (!ok) return; // batal submit
+    }
+  } catch (e) {
+    console.warn('Gagal pre-check, lanjut submit sebagai upsert.', e);
+  }
+  // <<< PRE-CHECK SELESAI
 
   overlaySpinner.style.display = "flex";
   try {
@@ -204,32 +231,23 @@ async function handleSubmit(e) {
 
     if (!res.ok) throw new Error(result.error || `Gagal menyimpan (status ${res.status})`);
 
-    // Sukses
-    // Reset form & progres
+    // sukses → reset
     form.reset();
     allSelectEls.forEach(sel => (sel.value = ""));
     updateProgressAndSkor();
 
-    // Reset PM list setelah submit
     pmSelect.innerHTML = '<option value="">-- Pilih PM --</option>';
     pmSelect.disabled = true;
 
-    // reset asesor hidden & tampilannya
-    if (asesorHidden) asesorHidden.value = "";
-    asesorField.innerHTML = '<option value="">-- Pilih Asesor --</option>';
-    asesorField.disabled = true;
-    
-    // kalau mau sekalian sembunyikan blok asesor lagi (opsional)
-    const asesorGroup = document.getElementById("asesorGroup");
-    if (asesorGroup) asesorGroup.classList.add("hidden");
-    
-    alert("Data berhasil disimpan!");
+    // opsional: tampilkan pesan sesuai kondisi pre-check
+    alert((result.rows && result.rows > 0) ? "Data berhasil disimpan/diupdate." : "Data berhasil disimpan.");
   } catch (err) {
     overlaySpinner.style.display = "none";
     console.error("Submit error:", err);
     alert("Gagal menyimpan: " + err.message);
   }
 }
+
 
 // ========== INIT ==========
 document.addEventListener("DOMContentLoaded", async () => {

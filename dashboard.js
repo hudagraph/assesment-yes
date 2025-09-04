@@ -48,13 +48,6 @@
     }
   }
 
-  function resetFilters() {
-    $('periodeSelect').value = 'Assesment Awal';
-    $('wilayahSelect').value = '';
-    $('searchPm').value = '';
-    const suggest = $('pmSuggest'); if (suggest) suggest.classList.add('hidden');
-    refreshDashboard();
-  }
   // =============================
   // KPI Cards
   // =============================
@@ -283,18 +276,33 @@
     }
   }
 
+  function resetFilters() {
+    $('periodeSelect')?.value = 'Assesment Awal';
+    $('wilayahSelect')?.value = '';
+    $('searchPm')?.value = '';
+    $('pmSuggest')?.classList.add('hidden');
+    refreshDashboard();
+  }
+  
   document.addEventListener('DOMContentLoaded', () => {
-    $('btnRefresh').addEventListener('click', refreshDashboard);
-    $('btnReset').addEventListener('click', resetFilters);
-    $('periodeSelect').addEventListener('change', refreshDashboard);
-    $('wilayahSelect').addEventListener('change', refreshDashboard);
-
+    const btnRefresh = $('btnRefresh');
+    const btnReset   = $('btnReset');
+    const periodeSel = $('periodeSelect');
+    const wilayahSel = $('wilayahSelect');
+    const searchPm   = $('searchPm');
+  
+    btnRefresh?.addEventListener('click', refreshDashboard);
+    if (btnReset) btnReset.addEventListener('click', resetFilters);
+    periodeSel?.addEventListener('change', refreshDashboard);
+    wilayahSel?.addEventListener('change', refreshDashboard);
+  
     let t;
-    $('searchPm').addEventListener('input', () => {
+    searchPm?.addEventListener('input', () => {
       clearTimeout(t);
-      t = setTimeout(() => { /* optional auto-refresh */ }, 600);
+      t = setTimeout(() => { /* optional live refresh */ }, 600);
     });
-
+  
     refreshDashboard();
   });
+
 })();

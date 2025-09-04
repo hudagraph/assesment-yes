@@ -51,6 +51,7 @@ function renderAsesorField(wilayah, asesorMap = {}) {
   // Tiap wilayah hanya punya 1 asesor → auto-isi & disabled
   const list = asesorMap[wilayah] || [];
   const asesor = list.length ? list[0] : "";
+  asesorField.value = asesor;
 
   asesorField.innerHTML = '<option value="">-- Pilih Asesor --</option>';
   if (asesor) {

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Form Penilaian YES 2025</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="font-sans bg-gray-50 max-w-5xl mx-auto p-6">
+
+  <!-- Header -->
+  <div class="fixed top-0 left-0 right-0 bg-white shadow z-50 p-4">
+    <h2 class="text-center text-xl font-bold mb-2">Form Penilaian Performa YES</h2>
+    <div class="flex items-center gap-4">
+      <div class="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+        <div id="progressBar" class="h-4 bg-green-400" style="width: 0%"></div>
+      </div>
+      <div class="text-sm text-gray-700 whitespace-nowrap">
+        Terisi: <span id="filledCount">0</span> / 62 | Total Skor: <span id="totalScore">0</span> | Hasil: <span id="resultText">-</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pt-28"></div>
+
+  <!-- Form -->
+  <form id="penilaianForm" class="space-y-4">
+    <div>
+      <label class="font-semibold block mb-1">Wilayah</label>
+      <select id="wilayahSelect" name="wilayah" required class="w-full px-3 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-sky-400"></select>
+    </div>
+
+    <div>
+      <label class="font-semibold block mb-1">Asesor</label>
+      <select id="asesorSelect" name="asesor" required disabled class="w-full px-3 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-sky-400"></select>
+    </div>
+
+    <div>
+      <label class="font-semibold block mb-1">PM</label>
+      <select id="pmSelect" name="pm" required disabled class="w-full px-3 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-sky-400"></select>
+    </div>
+
+    <div>
+      <label class="font-semibold block mb-1">Periode</label>
+      <input name="periode" required class="w-full px-3 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-sky-400" />
+    </div>
+
+    <div>
+      <label class="font-semibold block mb-1">Tanggal</label>
+      <input type="date" name="tanggal" required class="w-full px-3 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-sky-400" />
+    </div>
+
+    <div id="collapseSections" class="space-y-4"></div>
+
+    <button type="submit" class="submit-btn w-full sm:w-auto px-6 py-2 mt-6 bg-sky-500 hover:bg-sky-600 text-white font-semibold rounded-xl shadow transition">
+      Submit
+    </button>
+  </form>
+
+  <!-- Overlay Spinner -->
+  <div id="overlaySpinner" class="fixed inset-0 hidden z-50 flex items-center justify-center">
+    <div class="absolute inset-0 bg-sky-50/80"></div>
+    <div class="relative flex flex-col items-center bg-white rounded-2xl shadow-2xl px-8 py-6 space-y-3 min-w-[200px]">
+      <svg class="w-12 h-12 text-sky-400 animate-spin" viewBox="0 0 38 38" stroke="currentColor">
+        <g fill="none" fill-rule="evenodd">
+          <g transform="translate(1 1)" stroke-width="4">
+            <circle stroke-opacity=".3" cx="18" cy="18" r="18"/>
+            <path d="M36 18c0-9.94-8.06-18-18-18"></path>
+          </g>
+        </g>
+      </svg>
+      <div class="text-sky-700 font-semibold">Menyimpan data...</div>
+    </div>
+  </div>
+
+  <!-- Load main.js -->
+  <script src="main.js" defer></script>
+</body>
+</html>

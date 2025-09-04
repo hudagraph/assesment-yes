@@ -1,16 +1,21 @@
 // dashboard.js
 
-let trendChart, profileChart;
+let trendChart = null;
+let profileChart = null;
 let pmPool = []; // untuk autocomplete
 
-function fmtPct(x) {
-  return (x == null || isNaN(x)) ? '-' : `${Number(x).toFixed(2)}%`;
-}
+// Helpers
+const $ = (id) => document.getElementById(id);
+const setText = (id, val) => { const el = $(id); if (el) el.textContent = val; };
+const fmtPct = (x) => (x == null || isNaN(x)) ? '-' : `${Number(x).toFixed(2)}%`;
 
+// =============================
+// Fetch data dari Netlify Func
+// =============================
 async function fetchSummary() {
-  const periode = document.getElementById('periodeSelect').value;
-  const wilayah = document.getElementById('wilayahSelect').value;
-  const q = document.getElementById('searchPm').value.trim();
+  const periode = $('periodeSelect').value;
+  const wilayah = $('wilayahSelect').value;
+  const q = $('searchPm').value.trim();
 
   const qs = new URLSearchParams();
   qs.set('periode', periode);
@@ -22,73 +27,77 @@ async function fetchSummary() {
   return res.json();
 }
 
+// =============================
+// Filters
+// =============================
 function renderWilayahOptions(payload) {
-  const wilayahSelect = document.getElementById('wilayahSelect');
+  const wilayahSelect = $('wilayahSelect');
   const current = wilayahSelect.value;
   wilayahSelect.innerHTML = '<option value="">(Semua Wilayah)</option>';
+
   (payload.wilayah_list || []).sort().forEach(w => {
     const opt = document.createElement('option');
     opt.value = w;
     opt.textContent = w;
     wilayahSelect.appendChild(opt);
   });
-  // pertahankan pilihan jika masih ada
+
+  // pertahankan pilihan jika masih valid
   if ((payload.wilayah_list || []).includes(current)) {
     wilayahSelect.value = current;
   }
 }
 
+// =============================
+// KPI Cards
+// =============================
 function renderKPIsTop(payload) {
   const { kpis, meta } = payload;
-  document.getElementById('kpiCount').textContent = (kpis.count || 0).toString();
-  document.getElementById('kpiCountSub').textContent = kpis.total_target_pm
-    ? `dari ${kpis.total_target_pm} PM target`
-    : '';
-  document.getElementById('kpiAvgTotal').textContent = fmtPct(kpis.avg_total_pct);
-  document.getElementById('kpiWilayah').textContent = (meta.all_wilayah_count || 0).toString();
-  document.getElementById('kpiAvgGrade').textContent = kpis.avg_grade || '-';
+  setText('kpiCount', (kpis.count || 0).toString());
+  setText('kpiCountSub', kpis.total_target_pm ? `dari ${kpis.total_target_pm} PM target` : '');
+  setText('kpiAvgTotal', fmtPct(kpis.avg_total_pct));
+  setText('kpiWilayah', (meta.all_wilayah_count || 0).toString());
+  setText('kpiAvgGrade', kpis.avg_grade || '-');
 
-  const gradesDiv = document.getElementById('kpiGrades');
+  const gradesDiv = $('kpiGrades');
   gradesDiv.innerHTML = '';
-  const entries = Object.entries(kpis.grade_counts || {}).sort((a,b) => b[1]-a[1]);
+  const entries = Object.entries(kpis.grade_counts || {}).sort((a,b) => b[1] - a[1]);
   if (!entries.length) {
     gradesDiv.textContent = '-';
   } else {
-    entries.forEach(([g,n]) => {
-      const span = document.createElement('span');
-      span.className = 'inline-block bg-gray-100 text-gray-700 px-2 py-1 rounded mr-2 mb-1';
-      span.textContent = `${g}: ${n}`;
-      gradesDiv.appendChild(span);
+    entries.forEach(([g, n]) => {
+      const pill = document.createElement('span');
+      pill.className = 'inline-block bg-gray-100 text-gray-700 px-2 py-1 rounded mr-2 mb-1';
+      pill.textContent = `${g}: ${n}`;
+      gradesDiv.appendChild(pill);
     });
   }
 }
 
 function renderKPIsSections(avgWithGrade) {
-  const setItem = (idPct, idGrade, obj) => {
-    document.getElementById(idPct).textContent = fmtPct(obj.pct);
-    document.getElementById(idGrade).textContent = obj.grade;
+  const put = (pctId, gradeId, obj) => {
+    setText(pctId, fmtPct(obj.pct));
+    setText(gradeId, obj.grade);
   };
-  setItem('kpiCP', 'kpiCPg', avgWithGrade.campus_preparation);
-  setItem('kpiAM', 'kpiAMg', avgWithGrade.akhlak_mulia);
-  setItem('kpiQM', 'kpiQMg', avgWithGrade.quranic_mentorship);
-  setItem('kpiSS', 'kpiSSg', avgWithGrade.softskill);
-  setItem('kpiLD', 'kpiLDg', avgWithGrade.leadership);
+  put('kpiCP', 'kpiCPg', avgWithGrade.campus_preparation);
+  put('kpiAM', 'kpiAMg', avgWithGrade.akhlak_mulia);
+  put('kpiQM', 'kpiQMg', avgWithGrade.quranic_mentorship);
+  put('kpiSS', 'kpiSSg', avgWithGrade.softskill);
+  put('kpiLD', 'kpiLDg', avgWithGrade.leadership);
 }
 
+// =============================
+// Charts
+// =============================
 function renderTrendChart(payload) {
-  const ctx = document.getElementById('trendChart').getContext('2d');
-  const labels = payload.chartTrend.labels;
-  const data = payload.chartTrend.total_pct_avg;
+  const ctx = $('trendChart').getContext('2d');
+  const labels = payload.chartTrend.labels || [];
+  const data = payload.chartTrend.total_pct_avg || [];
 
   const chartData = {
     labels,
     datasets: [
-      {
-        label: 'Rata-rata Total (%)',
-        data,
-        tension: 0.3,
-        fill: false
-      }
+      { label: 'Rata-rata Total (%)', data, tension: 0.3, fill: false }
     ]
   };
 
@@ -107,7 +116,7 @@ function renderTrendChart(payload) {
         y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } }
       },
       plugins: {
-        legend: { display: true, position: 'bottom' },
+        legend: { position: 'bottom' },
         tooltip: { callbacks: { label: (c) => fmtPct(c.parsed.y) } }
       }
     }
@@ -115,9 +124,7 @@ function renderTrendChart(payload) {
 }
 
 function renderProfileByWilayahChart(payload) {
-  const canvas = document.getElementById('profileByWilayahChart');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
+  const ctx = $('profileByWilayahChart').getContext('2d');
 
   const labels = payload.chartProfileByWilayah?.wilayahLabels || [];
   const ds = payload.chartProfileByWilayah?.datasets || {};
@@ -141,13 +148,13 @@ function renderProfileByWilayahChart(payload) {
     ]
   };
 
-  if (window.profileChart) {
-    window.profileChart.data = data;
-    window.profileChart.update();
+  if (profileChart) {
+    profileChart.data = data;
+    profileChart.update();
     return;
   }
 
-  window.profileChart = new Chart(ctx, {
+  profileChart = new Chart(ctx, {
     type: 'bar',
     data,
     options: {
@@ -157,25 +164,26 @@ function renderProfileByWilayahChart(payload) {
       },
       plugins: {
         legend: { position: 'bottom' },
-        tooltip: { callbacks: { label: (c) => `${c.dataset.label} ${Number(c.parsed.y).toFixed(2)}%` } }
+        tooltip: { callbacks: { label: (c) => `${c.dataset.label} ${fmtPct(c.parsed.y)}` } }
       }
     }
   });
 }
 
-
+// =============================
+// Tabel
+// =============================
 function renderTable(payload) {
-  const tbody = document.getElementById('tableBody');
-  const info = document.getElementById('tableInfo');
-  tbody.innerHTML = '';
-
+  const tbody = $('tableBody');
+  const info = $('tableInfo');
   const rows = payload.rows || [];
+
   info.textContent = `${rows.length} baris`;
+  tbody.innerHTML = '';
 
   rows.forEach(r => {
     const tr = document.createElement('tr');
     tr.className = 'border-b';
-
     tr.innerHTML = `
       <td class="px-3 py-2">${r.wilayah || '-'}</td>
       <td class="px-3 py-2">${r.asesor || '-'}</td>
@@ -192,10 +200,14 @@ function renderTable(payload) {
   });
 }
 
+// =============================
+// Autocomplete "Cari PM"
+// =============================
 function setupAutocomplete(payload) {
   pmPool = payload.pm_names || [];
-  const searchPm = document.getElementById('searchPm');
-  const suggest = document.getElementById('pmSuggest');
+
+  const input = $('searchPm');
+  const suggest = $('pmSuggest');
 
   function showSuggestions(q) {
     suggest.innerHTML = '';
@@ -206,36 +218,45 @@ function setupAutocomplete(payload) {
       const li = document.createElement('li');
       li.className = 'px-3 py-2 hover:bg-gray-100 cursor-pointer';
       li.textContent = name;
-      li.onclick = () => {
-        searchPm.value = name;
-        suggest.classList.add('hidden');
-        refreshDashboard();
-      };
+      li.onclick = () => { input.value = name; suggest.classList.add('hidden'); refreshDashboard(); };
       suggest.appendChild(li);
     });
     suggest.classList.remove('hidden');
   }
 
-  // events
-  searchPm.addEventListener('input', () => showSuggestions(searchPm.value));
-  searchPm.addEventListener('focus', () => showSuggestions(searchPm.value));
+  input.addEventListener('input', () => showSuggestions(input.value));
+  input.addEventListener('focus', () => showSuggestions(input.value));
   document.addEventListener('click', (e) => {
-    const within = e.target === searchPm || suggest.contains(e.target);
+    const within = e.target === input || suggest.contains(e.target);
     if (!within) suggest.classList.add('hidden');
   });
 }
 
+// =============================
+// Orkestrasi
+// =============================
 async function refreshDashboard() {
-  const btn = document.getElementById('btnRefresh');
+  const btn = $('btnRefresh');
   btn.disabled = true; btn.textContent = 'Loading...';
+
   try {
     const payload = await fetchSummary();
+
+    // Filters
     renderWilayahOptions(payload);
+
+    // KPIs
     renderKPIsTop(payload);
     renderKPIsSections(payload.avgSectionsWithGrade);
-    renderTrendChart(payload);
-    renderProfileByWilayahChart(payload);
+
+    // Charts
+    renderTrendChart(payload);                 // Line trend 4 periode
+    renderProfileByWilayahChart(payload);      // Bar compare profil per wilayah
+
+    // Tabel
     renderTable(payload);
+
+    // Autocomplete
     setupAutocomplete(payload);
   } catch (err) {
     console.error(err);
@@ -246,22 +267,16 @@ async function refreshDashboard() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('btnRefresh').addEventListener('click', refreshDashboard);
-  document.getElementById('periodeSelect').addEventListener('change', refreshDashboard);
-  document.getElementById('wilayahSelect').addEventListener('change', refreshDashboard);
+  $('btnRefresh').addEventListener('click', refreshDashboard);
+  $('periodeSelect').addEventListener('change', refreshDashboard);
+  $('wilayahSelect').addEventListener('change', refreshDashboard);
 
-  // Debounce search (tetap ada, walau autocomplete juga trigger refresh saat item dipilih)
-  const search = document.getElementById('searchPm');
+  // Optional debounce pada input, actual refresh terjadi saat pilih suggestion atau klik Refresh
   let t;
-  search.addEventListener('input', () => {
+  $('searchPm').addEventListener('input', () => {
     clearTimeout(t);
-    t = setTimeout(() => {
-      // Jangan refresh keras setiap ketik; cukup saat pilih suggestion atau klik Refresh
-      // Kalau mau otomatis, uncomment:
-      // refreshDashboard();
-    }, 600);
+    t = setTimeout(() => { /* bisa auto-refresh jika mau */ }, 600);
   });
 
-  // Initial load
   refreshDashboard();
 });

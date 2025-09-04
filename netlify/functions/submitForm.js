@@ -4,6 +4,11 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = 'https://dorppttdlqqtrjoastor.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvcnBwdHRkbHFxdHJqb2FzdG9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5MTQzOTQsImV4cCI6MjA3MjQ5MDM5NH0.tMC5JrzsdZHp3_eq0ifQPrYaks8XQstbhD6M1VmFHbI';
 
+function toNum(x) {
+  const n = Number(x);
+  return Number.isFinite(n) ? n : null;
+}
+
 export async function handler(event) {
   try {
     if (event.httpMethod !== 'POST') {
@@ -13,57 +18,57 @@ export async function handler(event) {
     const body = JSON.parse(event.body || '{}');
     const { wilayah, asesor, pm, periode, tanggal, nilai } = body;
 
-    if (!wilayah || !asesor || !pm || !periode || !tanggal || !Array.isArray(nilai) || nilai.length !== 62) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'Input tidak lengkap atau tidak valid.' }) };
+    if (!wilayah || !asesor || !pm || !periode || !tanggal) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'Semua field utama wajib diisi' }) };
+    }
+    if (!Array.isArray(nilai) || nilai.length !== 62) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'Jumlah nilai harus 62' }) };
     }
 
-    const totalSkor = nilai.reduce((sum, n) => sum + parseInt(n || 0, 10), 0);
-    const skor100 = Math.round((totalSkor / 248) * 100);
+    // rakit nilai_json + n01..n62
+    const nilai_json = nilai.map(v => toNum(v) ?? 0);
+    const cols = {};
+    for (let i = 0; i < 62; i++) {
+      const idx = (i + 1).toString().padStart(2, '0');
+      cols[`n${idx}`] = toNum(nilai_json[i]);
+    }
 
-    let grade = 'Below Standard (Lemah)';
-    if (skor100 === 100) grade = 'Excellent (Sempurna / Istimewa)';
-    else if (skor100 >= 90) grade = 'Very Good (Baik Sekali)';
-    else if (skor100 >= 80) grade = 'Good (Baik)';
-    else if (skor100 >= 70) grade = 'Satisfactory (Cukup)';
-    else if (skor100 >= 50) grade = 'Need Improvement (Kurang Baik)';
+    const payloadRow = {
+      wilayah,
+      asesor,
+      nama_pm: pm,
+      periode,
+      tanggal,            // 'YYYY-MM-DD'
+      nilai_json,
+      ...cols,
+    };
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    const { error: insertError } = await supabase
+    // UPSERT by unique key
+    const { data, error } = await supabase
       .from('penilaian_yes')
-      .insert({
-        wilayah,
-        asesor,
-        nama_pm: pm,
-        periode,
-        tanggal,
-        nilai_json: nilai,
-        total_skor: totalSkor,
-        grade
-      });
+      .upsert(payloadRow, { onConflict: 'wilayah,asesor,nama_pm,periode' })
+      .select();
 
-    if (insertError) {
-      console.error('Supabase insert error:', insertError);
-      return { statusCode: 500, body: JSON.stringify({ error: insertError.message }) };
+    if (error) {
+      return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
     }
 
-    const { error: updateError } = await supabase
+    // tandai sudah dinilai (opsional sesuai desain kamu)
+    await supabase
       .from('validasi_data')
       .update({ status: 'Sudah Dinilai' })
-      .match({ wilayah, asesor, nama_pm: pm });
-
-    if (updateError) {
-      console.error('Supabase update error:', updateError);
-      // tidak fatal untuk user; tetap balas sukses tapi log error
-    }
+      .eq('wilayah', wilayah)
+      .eq('asesor', asesor)
+      .eq('nama_pm', pm);
 
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'Sukses' })
+      body: JSON.stringify({ ok: true, rows: data?.length || 0 })
     };
-  } catch (err) {
-    console.error('submitForm fatal:', err);
+  } catch (e) {
+    console.error('submitForm fatal:', e);
     return { statusCode: 500, body: JSON.stringify({ error: 'Internal error' }) };
   }
 }

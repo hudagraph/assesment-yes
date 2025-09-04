@@ -41,16 +41,22 @@ function renderDropdownWilayah(wilayahList = []) {
 }
 
 function renderDropdownAsesor(wilayah, asesorMap) {
+  // Ambil asesor pertama untuk wilayah tsb
   const list = asesorMap[wilayah] || [];
+  const asesor = list.length ? list[0] : "";
+
+  // Isi dropdown dengan satu opsi & kunci
   asesorSelect.innerHTML = '<option value="">-- Pilih Asesor --</option>';
-  list.forEach(w => {
+  if (asesor) {
     const opt = document.createElement("option");
-    opt.value = w;
-    opt.textContent = w;
+    opt.value = asesor;
+    opt.textContent = asesor;
     asesorSelect.appendChild(opt);
-  });
-  asesorSelect.disabled = list.length === 0;
+    asesorSelect.value = asesor;
+  }
+  asesorSelect.disabled = true; // dikunci karena fixed per wilayah
 }
+
 
 function renderDropdownPM(wilayah, asesor, pmMap) {
   const key = `${wilayah}||${asesor}`;
@@ -200,9 +206,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderDropdownWilayah(data.wilayah);
 
   wilayahSelect.addEventListener("change", () => {
+    // Auto isi asesor & kunci
     renderDropdownAsesor(wilayahSelect.value, data.asesor);
+  
+    // Setelah asesor terisi otomatis, langsung render PM untuk pasangan (wilayah, asesor)
+    const wilayah = wilayahSelect.value;
+    const asesor = asesorSelect.value; // sudah otomatis terisi
     pmSelect.innerHTML = '<option value="">-- Pilih PM --</option>';
+    renderDropdownPM(wilayah, asesor, data.pm);
   });
+
 
   asesorSelect.addEventListener("change", () => {
     renderDropdownPM(wilayahSelect.value, asesorSelect.value, data.pm);

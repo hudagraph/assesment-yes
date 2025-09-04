@@ -28,7 +28,6 @@
     return res.json();
   }
 
-
   // =============================
   // Filters
   // =============================
@@ -49,6 +48,13 @@
     }
   }
 
+  function resetFilters() {
+    $('periodeSelect').value = 'Assesment Awal';
+    $('wilayahSelect').value = '';
+    $('searchPm').value = '';
+    const suggest = $('pmSuggest'); if (suggest) suggest.classList.add('hidden');
+    refreshDashboard();
+  }
   // =============================
   // KPI Cards
   // =============================
@@ -279,6 +285,7 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     $('btnRefresh').addEventListener('click', refreshDashboard);
+    $('btnReset').addEventListener('click', resetFilters);
     $('periodeSelect').addEventListener('change', refreshDashboard);
     $('wilayahSelect').addEventListener('change', refreshDashboard);
 

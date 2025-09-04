@@ -16,16 +16,18 @@
     const periode = $('periodeSelect').value;
     const wilayah = $('wilayahSelect').value;
     const q = $('searchPm').value.trim();
-
+  
     const qs = new URLSearchParams();
     qs.set('periode', periode);
     if (wilayah) qs.set('wilayah', wilayah);
     if (q) qs.set('q', q);
-
-    const res = await fetch(`/.netlify/functions/getSummary?${qs.toString()}`, { cache: 'no-store' });
+  
+    const endpoint = '/.netlify/functions/getSummary';   // <- pastikan ini
+    const res = await fetch(`${endpoint}?${qs.toString()}`, { cache: 'no-store' });
     if (!res.ok) throw new Error(`getSummary failed: ${res.status}`);
     return res.json();
   }
+
 
   // =============================
   // Filters

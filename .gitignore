@@ -1,0 +1,9 @@
+# Folder dan file yang tidak ingin dilacak Git
+node_modules/
+dist/
+.env
+.DS_Store
+*.log
+*.zip
+.vscode/
+netlify/functions/node_modules/

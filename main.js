@@ -1,5 +1,6 @@
-// main.js (untuk frontend)
+// main.js (frontend Netlify + Supabase)
 
+// ========== KONFIGURASI KELOMPOK INDIKATOR (jumlah total 62) ==========
 const indikatorData = [
   { kategori: "Campus Preparation", jumlah: 8 },
   { kategori: "Akhlak Mulia", jumlah: 18 },
@@ -8,44 +9,49 @@ const indikatorData = [
   { kategori: "Leadership", jumlah: 19 }
 ];
 
-// Ambil referensi element
-const wilayahSelect = document.getElementById("wilayahSelect");
-const asesorField = document.getElementById('asesorField').classList.add('hidden');
-const pmSelect = document.getElementById("pmSelect");
-const progressBar = document.getElementById("progressBar");
-const filledCount = document.getElementById("filledCount");
-const totalScore = document.getElementById("totalScore");
-const resultText = document.getElementById("resultText");
+// ========== ELEMEN DOM ==========
+const wilayahSelect  = document.getElementById("wilayahSelect");
+const asesorField    = document.getElementById("asesorField"); // <select id="asesorField" ...>
+const pmSelect       = document.getElementById("pmSelect");
+
+const progressBar    = document.getElementById("progressBar");
+const filledCount    = document.getElementById("filledCount");
+const totalScore     = document.getElementById("totalScore");
+const resultText     = document.getElementById("resultText");
 
 const overlaySpinner = document.getElementById("overlaySpinner");
 const collapseContainer = document.getElementById("collapseSections");
 
-let allSelectEls = [];
+let allSelectEls = []; // select skor untuk 62 indikator
 
+// ========== API HELPERS ==========
 async function getValidasiData() {
-  const res = await fetch('/.netlify/functions/getValidasi');
-  if (!res.ok) {
-    console.error('getValidasi status', res.status);
+  try {
+    const res = await fetch("/.netlify/functions/getValidasi", { cache: "no-store" });
+    if (!res.ok) throw new Error(`Status ${res.status}`);
+    return await res.json(); // { wilayah:[], asesor:{[wilayah]:[asesor]}, pm:{["wilayah||asesor"]:[pm]} }
+  } catch (err) {
+    console.error("Gagal memuat getValidasi:", err);
     return { wilayah: [], asesor: {}, pm: {} };
   }
-  return res.json();
 }
 
+// ========== RENDER HELPERS ==========
 function renderDropdownWilayah(wilayahList = []) {
   wilayahSelect.innerHTML = '<option value="">-- Pilih Wilayah --</option>';
   wilayahList.forEach(w => {
-    const opt = document.createElement('option');
-    opt.value = w; opt.textContent = w;
+    const opt = document.createElement("option");
+    opt.value = w;
+    opt.textContent = w;
     wilayahSelect.appendChild(opt);
   });
 }
 
-function renderDropdownAsesor(wilayah, asesorMap) {
-  // Ambil asesor pertama untuk wilayah tsb
+function renderAsesorField(wilayah, asesorMap = {}) {
+  // Tiap wilayah hanya punya 1 asesor → auto-isi & disabled
   const list = asesorMap[wilayah] || [];
   const asesor = list.length ? list[0] : "";
 
-  // Isi dropdown dengan satu opsi & kunci
   asesorField.innerHTML = '<option value="">-- Pilih Asesor --</option>';
   if (asesor) {
     const opt = document.createElement("option");
@@ -54,18 +60,17 @@ function renderDropdownAsesor(wilayah, asesorMap) {
     asesorField.appendChild(opt);
     asesorField.value = asesor;
   }
-  asesorField.disabled = true; // dikunci karena fixed per wilayah
+  asesorField.disabled = true; // kunci karena fixed per wilayah
 }
 
-
-function renderDropdownPM(wilayah, asesor, pmMap) {
+function renderDropdownPM(wilayah, asesor, pmMap = {}) {
   const key = `${wilayah}||${asesor}`;
   const list = pmMap[key] || [];
   pmSelect.innerHTML = '<option value="">-- Pilih PM --</option>';
-  list.forEach(w => {
+  list.forEach(pm => {
     const opt = document.createElement("option");
-    opt.value = w;
-    opt.textContent = w;
+    opt.value = pm;
+    opt.textContent = pm;
     pmSelect.appendChild(opt);
   });
   pmSelect.disabled = list.length === 0;
@@ -103,14 +108,14 @@ function renderIndikatorTable(indikatorList) {
 
     const tbody = table.querySelector("tbody");
     for (let i = 0; i < group.jumlah; i++) {
-      const data = indikatorList[indikatorIndex] || { indikator: "INDIKATOR KURANG", sub: "" };
+      const row = indikatorList[indikatorIndex] || { indikator: "INDIKATOR KURANG", sub: "" };
       const tr = document.createElement("tr");
       tr.className = indikatorIndex % 2 === 0 ? "bg-white" : "bg-gray-50";
 
       tr.innerHTML = `
         <td class="border border-gray-200 px-2 py-2 text-center">${indikatorIndex + 1}</td>
-        <td class="border border-gray-200 px-2 py-2">${data.indikator}</td>
-        <td class="border border-gray-200 px-2 py-2">${data.sub}</td>
+        <td class="border border-gray-200 px-2 py-2">${row.indikator}</td>
+        <td class="border border-gray-200 px-2 py-2">${row.sub}</td>
         <td class="border border-gray-200 px-2 py-2 text-center">
           <select name="nilai" required data-idx="${indikatorIndex}"
                   class="w-full border rounded-md px-2 py-1 focus:ring-2 focus:ring-sky-400 outline-none">
@@ -122,19 +127,22 @@ function renderIndikatorTable(indikatorList) {
           </select>
         </td>
       `;
+
       const selectEl = tr.querySelector("select");
       selectEl.addEventListener("change", updateProgressAndSkor);
       allSelectEls.push(selectEl);
       tbody.appendChild(tr);
       indikatorIndex++;
     }
+
     details.appendChild(table);
     collapseContainer.appendChild(details);
   });
 }
 
+// ========== PROGRESS & SKOR ==========
 function updateProgressAndSkor() {
-  const nilai = allSelectEls.map(sel => parseInt(sel.value) || 0);
+  const nilai = allSelectEls.map(sel => parseInt(sel.value, 10) || 0);
   const terisi = allSelectEls.filter(sel => sel.value).length;
   const total = nilai.reduce((a, b) => a + b, 0);
   const percent = Math.round((terisi / allSelectEls.length) * 100);
@@ -154,78 +162,94 @@ function updateProgressAndSkor() {
   resultText.textContent = grade;
 }
 
+// ========== SUBMIT ==========
 async function handleSubmit(e) {
   e.preventDefault();
 
   const nilai = allSelectEls.map(sel => sel.value);
-  if (nilai.some(n => n === "")) return alert("Semua skor wajib diisi!");
+  if (nilai.some(n => n === "")) {
+    alert("Semua skor wajib diisi!");
+    return;
+  }
 
   const form = e.target;
   const data = new FormData(form);
   const payload = {
     pm: data.get("pm"),
     wilayah: data.get("wilayah"),
-    asesor: data.get("asesor"),
+    asesor: data.get("asesor"), // ini adalah asesorField yang sudah auto-isi & disabled
     periode: data.get("periode"),
     tanggal: data.get("tanggal"),
     nilai
   };
 
-  overlaySpinner.style.display = "flex";
+  // Validasi minimal
+  if (!payload.wilayah || !payload.asesor || !payload.pm || !payload.periode || !payload.tanggal) {
+    alert("Semua field utama wajib diisi!");
+    return;
+  }
 
+  overlaySpinner.style.display = "flex";
   try {
     const res = await fetch("/.netlify/functions/submitForm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
-
-    const result = await res.json();
+    const result = await res.json().catch(() => ({}));
     overlaySpinner.style.display = "none";
-    if (!res.ok) throw new Error(result.error || "Gagal menyimpan");
+
+    if (!res.ok) throw new Error(result.error || `Gagal menyimpan (status ${res.status})`);
+
+    // Sukses
+    // Reset form & progres
+    form.reset();
+    allSelectEls.forEach(sel => (sel.value = ""));
+    updateProgressAndSkor();
+
+    // Reset PM list setelah submit
+    pmSelect.innerHTML = '<option value="">-- Pilih PM --</option>';
+    pmSelect.disabled = true;
 
     alert("Data berhasil disimpan!");
-    form.reset();
-    allSelectEls.forEach(sel => sel.value = "");
-    updateProgressAndSkor();
   } catch (err) {
     overlaySpinner.style.display = "none";
+    console.error("Submit error:", err);
     alert("Gagal menyimpan: " + err.message);
   }
 }
 
-// ==== INIT ====
+// ========== INIT ==========
 document.addEventListener("DOMContentLoaded", async () => {
-  const wilayahInput = document.querySelector("input[name='wilayah']");
-  const asesorInput = document.querySelector("input[name='asesor']");
-  const periodeInput = document.querySelector("input[name='periode']");
-  const tanggalInput = document.querySelector("input[name='tanggal']");
-  if (tanggalInput) tanggalInput.value = new Date().toISOString().split('T')[0];
+  // set default tanggal = hari ini
+  const tanggalInput = document.querySelector('input[name="tanggal"]');
+  if (tanggalInput) tanggalInput.value = new Date().toISOString().split("T")[0];
 
+  // Muat data validasi (wilayah, asesor, pm)
   const data = await getValidasiData();
   renderDropdownWilayah(data.wilayah);
 
+  // Event: pilih Wilayah → auto isi Asesor, lalu render PM
   wilayahSelect.addEventListener("change", () => {
-    // Auto isi asesor & kunci
-    renderDropdownAsesor(wilayahSelect.value, data.asesor);
-  
-    // Setelah asesor terisi otomatis, langsung render PM untuk pasangan (wilayah, asesor)
+    renderAsesorField(wilayahSelect.value, data.asesor);
+
     const wilayah = wilayahSelect.value;
-    const asesor = asesorField.value; // sudah otomatis terisi
+    const asesor = asesorField.value;
     pmSelect.innerHTML = '<option value="">-- Pilih PM --</option>';
     renderDropdownPM(wilayah, asesor, data.pm);
   });
 
-
-  asesorField.addEventListener("change", () => {
-    renderDropdownPM(wilayahSelect.value, asesorField.value, data.pm);
-  });
-
-  // Render indikator
-  const indikatorList = await fetch("indikator.json").then(r => r.json());
-  renderIndikatorTable(indikatorList);
+  // Render indikator (ambil dari file indikator.json agar modular)
+  try {
+    const indikatorList = await fetch("indikator.json", { cache: "no-store" }).then(r => r.json());
+    renderIndikatorTable(indikatorList);
+  } catch (err) {
+    console.error("Gagal memuat indikator.json:", err);
+    // fallback minimal kalau file tak ditemukan
+    renderIndikatorTable([]);
+  }
   updateProgressAndSkor();
 
-  // Event Submit
+  // Event submit
   document.getElementById("penilaianForm").addEventListener("submit", handleSubmit);
 });

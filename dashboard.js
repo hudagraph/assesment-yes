@@ -89,35 +89,26 @@
   // Charts
   // =============================
   function renderTrendChart(payload) {
-    const ctx = $('trendChart').getContext('2d');
+    const canvas = document.getElementById('trendChart');
+    const ctx = canvas.getContext('2d');
+  
+    // HANCURKAN CHART LAMA JIKA ADA
+    const existing = Chart.getChart(canvas);
+    if (existing) existing.destroy();
+  
     const labels = payload.chartTrend.labels || [];
     const data = payload.chartTrend.total_pct_avg || [];
-
-    const chartData = {
-      labels,
-      datasets: [
-        { label: 'Rata-rata Total (%)', data, tension: 0.3, fill: false }
-      ]
-    };
-
-    if (trendChart) {
-      trendChart.data = chartData;
-      trendChart.update();
-      return;
-    }
-
+  
     trendChart = new Chart(ctx, {
       type: 'line',
-      data: chartData,
+      data: {
+        labels,
+        datasets: [{ label: 'Rata-rata Total (%)', data, tension: 0.3, fill: false }]
+      },
       options: {
         responsive: true,
-        scales: {
-          y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } }
-        },
-        plugins: {
-          legend: { position: 'bottom' },
-          tooltip: { callbacks: { label: (c) => fmtPct(c.parsed.y) } }
-        }
+        scales: { y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } } },
+        plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: (c) => `${Number(c.parsed.y).toFixed(2)}%` } } }
       }
     });
   }
@@ -125,21 +116,23 @@
   // Chart perbandingan per WILAYAH (dengan fallback bila payload salah/empty)
   function renderProfileByWilayahChart(payload) {
     const canvas = document.getElementById('profileByWilayahChart');
-    if (!canvas) return;
     const ctx = canvas.getContext('2d');
-
-    // 1) Coba pakai data server dulu
+  
+    // HANCURKAN CHART LAMA JIKA ADA
+    const existing = Chart.getChart(canvas);
+    if (existing) existing.destroy();
+  
+    // Coba pakai data dari server
     let labels = payload.chartProfileByWilayah?.wilayahLabels || [];
     let ds = payload.chartProfileByWilayah?.datasets || {};
-
-    // 2) Deteksi: kalau labels kosong ATAU terlihat seperti daftar "nama PM",
-    //    rebuild aggregasi per-wilayah dari rows (fallback).
+  
+    // Fallback: kalau labels kosong ATAU terlihat seperti daftar nama PM, agregasi ulang dari rows jadi per-wilayah
     const looksLikePM = (arr) => {
       if (!arr.length) return false;
       const multiWord = arr.filter(x => (x || '').trim().split(/\s+/).length >= 2).length;
       return arr.length > 8 && multiWord / arr.length > 0.6;
     };
-
+  
     if (!labels.length || looksLikePM(labels)) {
       const map = new Map(); // w -> {count, cp, am, qm, ss, ld}
       (payload.rows || []).forEach(r => {
@@ -153,13 +146,13 @@
         s.ss += Number(r.softskill_pct || 0);
         s.ld += Number(r.leadership_pct || 0);
       });
-
+  
       labels = Array.from(map.keys()).sort();
-      const avgArr = (pick) => labels.map(w => {
-        const m = map.get(w); const d = m?.count || 0;
-        return Number(d ? (m[pick] / d).toFixed(2) : 0);
+      const avgArr = (k) => labels.map(w => {
+        const s = map.get(w), d = s?.count || 0;
+        return Number(d ? (s[k] / d).toFixed(2) : 0);
       });
-
+  
       ds = {
         campus_preparation_pct: avgArr('cp'),
         akhlak_mulia_pct:       avgArr('am'),
@@ -168,31 +161,29 @@
         leadership_pct:         avgArr('ld'),
       };
     }
-
-    const toNum = (a) => (a || []).map(Number);
-
-    const data = {
-      labels,
-      datasets: [
-        { label: 'CP%', data: toNum(ds.campus_preparation_pct), backgroundColor: '#F59E0B', borderColor: '#F59E0B', borderWidth: 1 },
-        { label: 'AM%', data: toNum(ds.akhlak_mulia_pct),       backgroundColor: '#3B82F6', borderColor: '#3B82F6', borderWidth: 1 },
-        { label: 'QM%', data: toNum(ds.quranic_mentorship_pct), backgroundColor: '#10B981', borderColor: '#10B981', borderWidth: 1 },
-        { label: 'SS%', data: toNum(ds.softskill_pct),          backgroundColor: '#8B5CF6', borderColor: '#8B5CF6', borderWidth: 1 },
-        { label: 'LD%', data: toNum(ds.leadership_pct),         backgroundColor: '#EF4444', borderColor: '#EF4444', borderWidth: 1 },
-      ]
-    };
-
-    if (profileChart) { profileChart.data = data; profileChart.update(); return; }
+  
+    const toNum = a => (a || []).map(Number);
+  
     profileChart = new Chart(ctx, {
       type: 'bar',
-      data,
+      data: {
+        labels,
+        datasets: [
+          { label: 'CP%', data: toNum(ds.campus_preparation_pct), backgroundColor: '#F59E0B', borderColor: '#F59E0B', borderWidth: 1 },
+          { label: 'AM%', data: toNum(ds.akhlak_mulia_pct),       backgroundColor: '#3B82F6', borderColor: '#3B82F6', borderWidth: 1 },
+          { label: 'QM%', data: toNum(ds.quranic_mentorship_pct), backgroundColor: '#10B981', borderColor: '#10B981', borderWidth: 1 },
+          { label: 'SS%', data: toNum(ds.softskill_pct),          backgroundColor: '#8B5CF6', borderColor: '#8B5CF6', borderWidth: 1 },
+          { label: 'LD%', data: toNum(ds.leadership_pct),         backgroundColor: '#EF4444', borderColor: '#EF4444', borderWidth: 1 },
+        ]
+      },
       options: {
         responsive: true,
         scales: { y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } } },
-        plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: (c) => `${c.dataset.label} ${Number(c.parsed.y).toFixed(2)}%` } } }
+        plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => `${c.dataset.label} ${Number(c.parsed.y).toFixed(2)}%` } } }
       }
     });
   }
+
 
   // =============================
   // Tabel

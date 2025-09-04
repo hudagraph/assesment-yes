@@ -23,17 +23,19 @@ const collapseContainer = document.getElementById("collapseSections");
 let allSelectEls = [];
 
 async function getValidasiData() {
-  const res = await fetch("/.netlify/functions/getValidasi");
-  const data = await res.json();
-  return data;
+  const res = await fetch('/.netlify/functions/getValidasi');
+  if (!res.ok) {
+    console.error('getValidasi status', res.status);
+    return { wilayah: [], asesor: {}, pm: {} };
+  }
+  return res.json();
 }
 
-function renderDropdownWilayah(wilayahList) {
+function renderDropdownWilayah(wilayahList = []) {
   wilayahSelect.innerHTML = '<option value="">-- Pilih Wilayah --</option>';
   wilayahList.forEach(w => {
-    const opt = document.createElement("option");
-    opt.value = w;
-    opt.textContent = w;
+    const opt = document.createElement('option');
+    opt.value = w; opt.textContent = w;
     wilayahSelect.appendChild(opt);
   });
 }

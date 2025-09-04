@@ -124,27 +124,67 @@ function renderTrendChart(payload) {
 }
 
 function renderProfileByWilayahChart(payload) {
-  const ctx = $('profileByWilayahChart').getContext('2d');
+  const canvas = document.getElementById('profileByWilayahChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
 
-  const labels = payload.chartProfileByWilayah?.wilayahLabels || [];
-  const ds = payload.chartProfileByWilayah?.datasets || {};
+  // 1) Coba pakai data server dulu
+  let labels = payload.chartProfileByWilayah?.wilayahLabels || [];
+  let ds = payload.chartProfileByWilayah?.datasets || {};
 
-  const toNumArr = (a) => (a || []).map(x => Number(x));
+  // 2) Deteksi: kalau labels kosong ATAU terlihat seperti daftar "nama PM",
+  //    kita rebuild dari payload.rows agar pasti per-wilayah.
+  const looksLikePM = (arr) => {
+    if (!arr.length) return false;
+    // Heuristik sederhana: nama PM biasanya > 1 kata & jumlah label banyak (>8)
+    const multiWord = arr.filter(x => (x || '').trim().split(/\s+/).length >= 2).length;
+    return arr.length > 8 && multiWord / arr.length > 0.6;
+  };
+
+  if (!labels.length || looksLikePM(labels)) {
+    const map = new Map(); // w -> {count, cp, am, qm, ss, ld}
+    (payload.rows || []).forEach(r => {
+      const w = (r.wilayah || '').trim() || '(Tanpa Wilayah)';
+      if (!map.has(w)) map.set(w, { count: 0, cp: 0, am: 0, qm: 0, ss: 0, ld: 0 });
+      const s = map.get(w);
+      s.count += 1;
+      s.cp += Number(r.campus_preparation_pct || 0);
+      s.am += Number(r.akhlak_mulia_pct || 0);
+      s.qm += Number(r.quranic_mentorship_pct || 0);
+      s.ss += Number(r.softskill_pct || 0);
+      s.ld += Number(r.leadership_pct || 0);
+    });
+
+    labels = Array.from(map.keys()).sort();
+    const avgArr = (pick) => labels.map(w => {
+      const m = map.get(w); const d = m?.count || 0;
+      return Number(d ? (m[pick] / d).toFixed(2) : 0);
+    });
+
+    ds = {
+      campus_preparation_pct: avgArr('cp'),
+      akhlak_mulia_pct:       avgArr('am'),
+      quranic_mentorship_pct: avgArr('qm'),
+      softskill_pct:          avgArr('ss'),
+      leadership_pct:         avgArr('ld'),
+    };
+  }
+
+  const toNum = (a) => (a || []).map(Number);
 
   const data = {
     labels,
     datasets: [
-      { label: 'CP%', data: toNumArr(ds.campus_preparation_pct), backgroundColor: '#F59E0B', borderColor: '#F59E0B', borderWidth: 1 },
-      { label: 'AM%', data: toNumArr(ds.akhlak_mulia_pct),       backgroundColor: '#3B82F6', borderColor: '#3B82F6', borderWidth: 1 },
-      { label: 'QM%', data: toNumArr(ds.quranic_mentorship_pct), backgroundColor: '#10B981', borderColor: '#10B981', borderWidth: 1 },
-      { label: 'SS%', data: toNumArr(ds.softskill_pct),          backgroundColor: '#8B5CF6', borderColor: '#8B5CF6', borderWidth: 1 },
-      { label: 'LD%', data: toNumArr(ds.leadership_pct),         backgroundColor: '#EF4444', borderColor: '#EF4444', borderWidth: 1 },
+      { label: 'CP%', data: toNum(ds.campus_preparation_pct), backgroundColor: '#F59E0B', borderColor: '#F59E0B', borderWidth: 1 },
+      { label: 'AM%', data: toNum(ds.akhlak_mulia_pct),       backgroundColor: '#3B82F6', borderColor: '#3B82F6', borderWidth: 1 },
+      { label: 'QM%', data: toNum(ds.quranic_mentorship_pct), backgroundColor: '#10B981', borderColor: '#10B981', borderWidth: 1 },
+      { label: 'SS%', data: toNum(ds.softskill_pct),          backgroundColor: '#8B5CF6', borderColor: '#8B5CF6', borderWidth: 1 },
+      { label: 'LD%', data: toNum(ds.leadership_pct),         backgroundColor: '#EF4444', borderColor: '#EF4444', borderWidth: 1 },
     ]
   };
 
-  if (profileChart) { profileChart.data = data; profileChart.update(); return; }
-
-  profileChart = new Chart(ctx, {
+  if (window.profileChart) { window.profileChart.data = data; window.profileChart.update(); return; }
+  window.profileChart = new Chart(ctx, {
     type: 'bar',
     data,
     options: {
@@ -154,6 +194,7 @@ function renderProfileByWilayahChart(payload) {
     }
   });
 }
+
 
 // =============================
 // Tabel

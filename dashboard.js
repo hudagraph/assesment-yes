@@ -115,11 +115,13 @@ function renderTrendChart(payload) {
 }
 
 function renderProfileByWilayahChart(payload) {
-  const ctx = document.getElementById('profileByWilayahChart').getContext('2d');
-  const labels = payload.chartProfileByWilayah.wilayahLabels || [];
-  const ds = payload.chartProfileByWilayah.datasets || {};
+  const canvas = document.getElementById('profileByWilayahChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
 
-  // Warna tetap per profil
+  const labels = payload.chartProfileByWilayah?.wilayahLabels || [];
+  const ds = payload.chartProfileByWilayah?.datasets || {};
+
   const COLORS = {
     cp: '#F59E0B', // amber
     am: '#3B82F6', // blue
@@ -139,11 +141,28 @@ function renderProfileByWilayahChart(payload) {
     ]
   };
 
-  if (profileChart) {
-    profileChart.data = data;
-    profileChart.update();
+  if (window.profileChart) {
+    window.profileChart.data = data;
+    window.profileChart.update();
     return;
   }
+
+  window.profileChart = new Chart(ctx, {
+    type: 'bar',
+    data,
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } }
+      },
+      plugins: {
+        legend: { position: 'bottom' },
+        tooltip: { callbacks: { label: (c) => `${c.dataset.label} ${Number(c.parsed.y).toFixed(2)}%` } }
+      }
+    }
+  });
+}
+
 
   profileChart = new Chart(ctx, {
     type: 'bar',

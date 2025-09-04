@@ -164,22 +164,6 @@ function renderProfileByWilayahChart(payload) {
 }
 
 
-  profileChart = new Chart(ctx, {
-    type: 'bar',
-    data,
-    options: {
-      responsive: true,
-      scales: {
-        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } }
-      },
-      plugins: {
-        legend: { position: 'bottom' },
-        tooltip: { callbacks: { label: (c) => `${c.dataset.label} ${fmtPct(c.parsed.y)}` } }
-      }
-    }
-  });
-}
-
 function renderTable(payload) {
   const tbody = document.getElementById('tableBody');
   const info = document.getElementById('tableInfo');

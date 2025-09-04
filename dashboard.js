@@ -267,6 +267,7 @@ async function refreshDashboard() {
 
   try {
     const payload = await fetchSummary();
+    console.log('Dashboard payload version:', payload.apiVersion, payload.chartProfileByWilayah?.wilayahLabels?.slice(0,5));
 
     // Filters
     renderWilayahOptions(payload);

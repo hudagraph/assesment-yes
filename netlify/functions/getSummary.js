@@ -126,29 +126,33 @@ export async function handler(event) {
       leadership:         { pct: avgSections.leadership_pct,         grade: gradeFromPct(avgSections.leadership_pct) },
     };
 
-    // 2) Bar chart perbandingan profil antar wilayah (rata-rata % per section per wilayah)
-    const perWilayahMap = new Map(); // wilayah -> accum
-    rows.forEach(r => {
-      if (!perWilayahMap.has(r.wilayah)) {
-        perWilayahMap.set(r.wilayah, {
-          count: 0,
-          campus_preparation_pct: 0,
-          akhlak_mulia_pct: 0,
-          quranic_mentorship_pct: 0,
-          softskill_pct: 0,
-          leadership_pct: 0,
-        });
+    // 2) Bar chart perbandingan profil antar wilayah (AVG % per section per WILAYAH)
+    const sumsByWilayah = new Map(); // w -> {count, cp, am, qm, ss, ld}
+    (rows || []).forEach(r => {
+      const w = r.wilayah || '(Tidak ada wilayah)';
+      if (!sumsByWilayah.has(w)) {
+        sumsByWilayah.set(w, { count: 0, cp: 0, am: 0, qm: 0, ss: 0, ld: 0 });
       }
-      const acc = perWilayahMap.get(r.wilayah);
-      acc.count += 1;
-      acc.campus_preparation_pct += Number(r.campus_preparation_pct || 0);
-      acc.akhlak_mulia_pct       += Number(r.akhlak_mulia_pct || 0);
-      acc.quranic_mentorship_pct += Number(r.quranic_mentorship_pct || 0);
-      acc.softskill_pct          += Number(r.softskill_pct || 0);
-      acc.leadership_pct         += Number(r.leadership_pct || 0);
+      const s = sumsByWilayah.get(w);
+      s.count += 1;
+      s.cp += Number(r.campus_preparation_pct || 0);
+      s.am += Number(r.akhlak_mulia_pct || 0);
+      s.qm += Number(r.quranic_mentorship_pct || 0);
+      s.ss += Number(r.softskill_pct || 0);
+      s.ld += Number(r.leadership_pct || 0);
     });
-
-    const wilayahLabels = [];
+    
+    // Tentukan label wilayah untuk chart.
+    // Jika user memilih filter 'wilayah', tampilkan hanya wilayah itu.
+    // Jika tidak ada filter, gunakan seluruh daftar wilayah dari validasi_data (agar urutan konsisten).
+    let wilayahLabels;
+    if (wilayah) {
+      wilayahLabels = [wilayah];
+    } else {
+      const setAll = new Set((vdAll || []).map(v => v.wilayah).filter(Boolean));
+      wilayahLabels = Array.from(setAll).sort();
+    }
+    
     const compareDatasets = {
       campus_preparation_pct: [],
       akhlak_mulia_pct: [],
@@ -156,15 +160,18 @@ export async function handler(event) {
       softskill_pct: [],
       leadership_pct: [],
     };
-    for (const [w, acc] of perWilayahMap.entries()) {
-      wilayahLabels.push(w);
-      const d = Math.max(acc.count, 1);
-      compareDatasets.campus_preparation_pct.push(+ (acc.campus_preparation_pct / d).toFixed(2));
-      compareDatasets.akhlak_mulia_pct.push(+ (acc.akhlak_mulia_pct / d).toFixed(2));
-      compareDatasets.quranic_mentorship_pct.push(+ (acc.quranic_mentorship_pct / d).toFixed(2));
-      compareDatasets.softskill_pct.push(+ (acc.softskill_pct / d).toFixed(2));
-      compareDatasets.leadership_pct.push(+ (acc.leadership_pct / d).toFixed(2));
-    }
+    
+    // Bangun data rata-rata per label
+    wilayahLabels.forEach(w => {
+      const s = sumsByWilayah.get(w);
+      const d = s?.count || 0;
+      const avg = (v) => +( (d ? v/d : 0).toFixed(2) );
+      compareDatasets.campus_preparation_pct.push(avg(s?.cp || 0));
+      compareDatasets.akhlak_mulia_pct.push(avg(s?.am || 0));
+      compareDatasets.quranic_mentorship_pct.push(avg(s?.qm || 0));
+      compareDatasets.softskill_pct.push(avg(s?.ss || 0));
+      compareDatasets.leadership_pct.push(avg(s?.ld || 0));
+    });
 
     // 3) Line chart tren 4 periode (avg total_pct per periode, dengan filter wilayah & q)
     let trendSel = supabase

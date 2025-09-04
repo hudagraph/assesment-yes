@@ -18,7 +18,7 @@
     const q = $('searchPm').value.trim();
   
     const qs = new URLSearchParams();
-    qs.set('periode', periode);
+    if (periode) qs.set('periode', periode);
     if (wilayah) qs.set('wilayah', wilayah);
     if (q) qs.set('q', q);
   

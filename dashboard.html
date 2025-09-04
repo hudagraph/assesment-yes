@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard YES 2025</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div class="max-w-7xl mx-auto p-6 space-y-6">
+    <header class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-sky-700">Dashboard Penilaian YES 2025</h1>
+      <a href="./" class="text-sky-600 hover:underline">← Kembali ke Form</a>
+    </header>
+
+    <!-- Filters -->
+    <section class="bg-white rounded-xl shadow p-4 grid gap-4 sm:grid-cols-4">
+      <div>
+        <label class="block text-sm font-semibold mb-1">Periode</label>
+        <select id="periodeSelect" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-sky-400">
+          <option>Assesment Awal</option>
+          <option>Tri Semester 1</option>
+          <option>Tri Semester 2</option>
+          <option>Assesment Akhir</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-semibold mb-1">Wilayah (opsional)</label>
+        <select id="wilayahSelect" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-sky-400">
+          <option value="">(Semua Wilayah)</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-semibold mb-1">Cari PM</label>
+        <input id="searchPm" placeholder="Nama PM..." class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-sky-400" />
+      </div>
+      <div class="flex items-end">
+        <button id="btnRefresh" class="w-full bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg font-semibold shadow">
+          Refresh
+        </button>
+      </div>
+    </section>
+
+    <!-- KPI Cards -->
+    <section class="grid gap-4 sm:grid-cols-4">
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-sm text-gray-500">Total Dinilai</div>
+        <div id="kpiCount" class="text-2xl font-bold mt-1">-</div>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-sm text-gray-500">Rata-rata Total (%)</div>
+        <div id="kpiAvgTotal" class="text-2xl font-bold mt-1">-</div>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-sm text-gray-500">Wilayah Aktif</div>
+        <div id="kpiWilayah" class="text-2xl font-bold mt-1">-</div>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-sm text-gray-500">Distribusi Grade</div>
+        <div id="kpiGrades" class="mt-1 text-sm"></div>
+      </div>
+    </section>
+
+    <!-- Chart -->
+    <section class="bg-white rounded-xl shadow p-4">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="font-semibold text-sky-700">Rata-rata Persentase per Section per Wilayah</h2>
+      </div>
+      <canvas id="barChart" height="120"></canvas>
+    </section>
+
+    <!-- Table -->
+    <section class="bg-white rounded-xl shadow p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold text-sky-700">Detail PM</h2>
+        <div id="tableInfo" class="text-sm text-gray-500"></div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr class="bg-gray-100 text-gray-700">
+              <th class="px-3 py-2 text-left">Wilayah</th>
+              <th class="px-3 py-2 text-left">Asesor</th>
+              <th class="px-3 py-2 text-left">PM</th>
+              <th class="px-3 py-2 text-right">CP%</th>
+              <th class="px-3 py-2 text-right">AM%</th>
+              <th class="px-3 py-2 text-right">QM%</th>
+              <th class="px-3 py-2 text-right">SS%</th>
+              <th class="px-3 py-2 text-right">LD%</th>
+              <th class="px-3 py-2 text-right">Total%</th>
+              <th class="px-3 py-2 text-left">Grade</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script src="dashboard.js" defer></script>
+</body>
+</html>

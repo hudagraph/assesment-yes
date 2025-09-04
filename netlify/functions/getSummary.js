@@ -199,6 +199,9 @@ export async function handler(event) {
     // pm_names untuk autocomplete
     const pm_names = Array.from(new Set((rows || []).map(r => r.nama_pm).filter(Boolean))).sort();
 
+    const apiVersion = 'chart-wilayah-v3';
+    body: JSON.stringify({ apiVersion, ...payload })
+    
     const payload = {
       periode,
       wilayah_list,

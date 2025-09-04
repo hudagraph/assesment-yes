@@ -142,10 +142,10 @@ export async function handler(event) {
       s.ld += Number(r.leadership_pct || 0);
     });
     
-    // Label = hanya wilayah yang PUNYA data di periode/filter ini
+    // Label = HANYA wilayah yang punya data
     let wilayahLabels = Array.from(sumsByWilayah.keys()).sort();
     
-    // Jika user memilih 1 wilayah, persempit ke satu label
+    // Jika user filter 1 wilayah, persempit
     if (wilayah) {
       wilayahLabels = wilayahLabels.filter(w => w === wilayah);
     }
@@ -168,6 +168,10 @@ export async function handler(event) {
       compareDatasets.softskill_pct.push(avg(s?.ss || 0));
       compareDatasets.leadership_pct.push(avg(s?.ld || 0));
     });
+    
+    // kirim
+    // chartProfileByWilayah: { wilayahLabels, datasets: compareDatasets }
+
 
     // 3) Line chart tren 4 periode (avg total_pct per periode, dengan filter wilayah & q)
     let trendSel = supabase

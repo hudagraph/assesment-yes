@@ -129,7 +129,7 @@ export async function handler(event) {
     // 2) Bar chart perbandingan profil antar wilayah (AVG % per section per WILAYAH)
     const sumsByWilayah = new Map(); // w -> {count, cp, am, qm, ss, ld}
     (rows || []).forEach(r => {
-      const w = r.wilayah || '(Tidak ada wilayah)';
+      const w = (r.wilayah || '').trim() || '(Tanpa Wilayah)';
       if (!sumsByWilayah.has(w)) {
         sumsByWilayah.set(w, { count: 0, cp: 0, am: 0, qm: 0, ss: 0, ld: 0 });
       }
@@ -142,16 +142,11 @@ export async function handler(event) {
       s.ld += Number(r.leadership_pct || 0);
     });
     
-    // Tentukan label wilayah untuk chart.
-    // Jika user memilih filter 'wilayah', tampilkan hanya wilayah itu.
-    // Jika tidak ada filter, gunakan seluruh daftar wilayah dari validasi_data (agar urutan konsisten).
-    let wilayahLabels;
-    if (wilayah) {
-      wilayahLabels = [wilayah];
-    } else {
-      const setAll = new Set((vdAll || []).map(v => v.wilayah).filter(Boolean));
-      wilayahLabels = Array.from(setAll).sort();
-    }
+    // Default: tampilkan HANYA wilayah yang punya data pada periode + filter saat ini
+    let wilayahLabels = Array.from(sumsByWilayah.keys()).sort();
+    
+    // Jika user memilih 1 wilayah, paksa hanya 1 label
+    if (wilayah) wilayahLabels = wilayahLabels.filter(w => w === wilayah);
     
     const compareDatasets = {
       campus_preparation_pct: [],
@@ -161,17 +156,20 @@ export async function handler(event) {
       leadership_pct: [],
     };
     
-    // Bangun data rata-rata per label
     wilayahLabels.forEach(w => {
       const s = sumsByWilayah.get(w);
       const d = s?.count || 0;
-      const avg = (v) => +( (d ? v/d : 0).toFixed(2) );
+      const avg = v => +( (d ? v/d : 0).toFixed(2) );
       compareDatasets.campus_preparation_pct.push(avg(s?.cp || 0));
       compareDatasets.akhlak_mulia_pct.push(avg(s?.am || 0));
       compareDatasets.quranic_mentorship_pct.push(avg(s?.qm || 0));
       compareDatasets.softskill_pct.push(avg(s?.ss || 0));
       compareDatasets.leadership_pct.push(avg(s?.ld || 0));
     });
+    
+    // kirim ke payload
+    // chartProfileByWilayah: { wilayahLabels, datasets: compareDatasets }
+
 
     // 3) Line chart tren 4 periode (avg total_pct per periode, dengan filter wilayah & q)
     let trendSel = supabase

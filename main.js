@@ -233,7 +233,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Event: pilih Wilayah → auto isi Asesor, lalu render PM
   wilayahSelect.addEventListener("change", () => {
     renderAsesorField(wilayahSelect.value, data.asesor);
-
+  
+    // tampilkan field asesor setelah otomatis terisi
+    const asesorGroup = document.getElementById("asesorGroup");
+    if (asesorGroup) asesorGroup.classList.remove("hidden");
+  
     const wilayah = wilayahSelect.value;
     const asesor = asesorField.value;
     pmSelect.innerHTML = '<option value="">-- Pilih PM --</option>';

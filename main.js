@@ -11,8 +11,9 @@ const indikatorData = [
 
 // ========== ELEMEN DOM ==========
 const wilayahSelect  = document.getElementById("wilayahSelect");
-const asesorField    = document.getElementById("asesorField"); // <select id="asesorField" ...>
+const asesorField    = document.getElementById("asesorField");
 const pmSelect       = document.getElementById("pmSelect");
+const asesorHidden   = document.getElementById("asesorHidden");
 
 const progressBar    = document.getElementById("progressBar");
 const filledCount    = document.getElementById("filledCount");
@@ -48,10 +49,8 @@ function renderDropdownWilayah(wilayahList = []) {
 }
 
 function renderAsesorField(wilayah, asesorMap = {}) {
-  // Tiap wilayah hanya punya 1 asesor → auto-isi & disabled
   const list = asesorMap[wilayah] || [];
   const asesor = list.length ? list[0] : "";
-  asesorField.value = asesor;
 
   asesorField.innerHTML = '<option value="">-- Pilih Asesor --</option>';
   if (asesor) {
@@ -61,7 +60,10 @@ function renderAsesorField(wilayah, asesorMap = {}) {
     asesorField.appendChild(opt);
     asesorField.value = asesor;
   }
-  asesorField.disabled = true; // kunci karena fixed per wilayah
+  asesorField.disabled = true;
+
+  // >>> penting: sinkronkan ke input hidden supaya ikut terkirim
+  if (asesorHidden) asesorHidden.value = asesor || "";
 }
 
 function renderDropdownPM(wilayah, asesor, pmMap = {}) {
@@ -212,6 +214,15 @@ async function handleSubmit(e) {
     pmSelect.innerHTML = '<option value="">-- Pilih PM --</option>';
     pmSelect.disabled = true;
 
+    // reset asesor hidden & tampilannya
+    if (asesorHidden) asesorHidden.value = "";
+    asesorField.innerHTML = '<option value="">-- Pilih Asesor --</option>';
+    asesorField.disabled = true;
+    
+    // kalau mau sekalian sembunyikan blok asesor lagi (opsional)
+    const asesorGroup = document.getElementById("asesorGroup");
+    if (asesorGroup) asesorGroup.classList.add("hidden");
+    
     alert("Data berhasil disimpan!");
   } catch (err) {
     overlaySpinner.style.display = "none";
@@ -230,19 +241,37 @@ document.addEventListener("DOMContentLoaded", async () => {
   const data = await getValidasiData();
   renderDropdownWilayah(data.wilayah);
 
-  // Event: pilih Wilayah → auto isi Asesor, lalu render PM
+  // Event: pilih Wilayah → auto isi Asesor (display), sinkron ke hidden, lalu render PM
   wilayahSelect.addEventListener("change", () => {
-    renderAsesorField(wilayahSelect.value, data.asesor);
-  
-    // tampilkan field asesor setelah otomatis terisi
     const asesorGroup = document.getElementById("asesorGroup");
+    const wilayah = wilayahSelect.value?.trim() || "";
+  
+    // jika user mengosongkan wilayah
+    if (!wilayah) {
+      // sembunyikan grup asesor & kosongkan semuanya
+      if (asesorGroup) asesorGroup.classList.add("hidden");
+      asesorField.innerHTML = '<option value="">-- Pilih Asesor --</option>';
+      asesorField.disabled = true;
+      if (asesorHidden) asesorHidden.value = "";
+  
+      pmSelect.innerHTML = '<option value="">-- Pilih PM --</option>';
+      pmSelect.disabled = true;
+      return;
+    }
+  
+    // isi asesor (otomatis 1 asesor per wilayah)
+    renderAsesorField(wilayah, data.asesor);
     if (asesorGroup) asesorGroup.classList.remove("hidden");
   
-    const wilayah = wilayahSelect.value;
-    const asesor = asesorField.value;
+    // sinkronkan ke input hidden supaya ikut terkirim saat submit
+    const asesor = asesorField.value || "";
+    if (asesorHidden) asesorHidden.value = asesor;
+  
+    // render daftar PM utk (wilayah, asesor)
     pmSelect.innerHTML = '<option value="">-- Pilih PM --</option>';
-    renderDropdownPM(wilayah, asesor, data.pm);
+    renderDropdownPM(wilayah, asesor, data.pm); // ini juga otomatis set disabled kalau list kosong
   });
+
 
   // Render indikator (ambil dari file indikator.json agar modular)
   try {

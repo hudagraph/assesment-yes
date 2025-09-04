@@ -277,12 +277,21 @@
   }
 
   function resetFilters() {
-    $('periodeSelect')?.value = 'Assesment Awal';
-    $('wilayahSelect')?.value = '';
-    $('searchPm')?.value = '';
-    $('pmSuggest')?.classList.add('hidden');
+    const periodeSel = $('periodeSelect');
+    if (periodeSel) periodeSel.value = 'Assesment Awal'; // pastikan ejaan sama dgn data
+  
+    const wilayahSel = $('wilayahSelect');
+    if (wilayahSel) wilayahSel.value = '';
+  
+    const search = $('searchPm');
+    if (search) search.value = '';
+  
+    const suggest = $('pmSuggest');
+    if (suggest) suggest.classList.add('hidden');
+  
     refreshDashboard();
   }
+
   
   document.addEventListener('DOMContentLoaded', () => {
     const btnRefresh = $('btnRefresh');
@@ -291,16 +300,18 @@
     const wilayahSel = $('wilayahSelect');
     const searchPm   = $('searchPm');
   
-    btnRefresh?.addEventListener('click', refreshDashboard);
-    btnReset?.addEventListener('click', resetFilters);
-    periodeSel?.addEventListener('change', refreshDashboard);
-    wilayahSel?.addEventListener('change', refreshDashboard);
+    if (btnRefresh) btnRefresh.addEventListener('click', refreshDashboard);
+    if (btnReset)   btnReset.addEventListener('click', resetFilters);
+    if (periodeSel) periodeSel.addEventListener('change', refreshDashboard);
+    if (wilayahSel) wilayahSel.addEventListener('change', refreshDashboard);
   
     let t;
-    searchPm?.addEventListener('input', () => {
-      clearTimeout(t);
-      t = setTimeout(() => { /* optional live refresh */ }, 600);
-    });
+    if (searchPm) {
+      searchPm.addEventListener('input', () => {
+        clearTimeout(t);
+        t = setTimeout(() => {}, 600);
+      });
+    }
   
     refreshDashboard();
   });

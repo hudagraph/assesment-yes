@@ -129,7 +129,6 @@ function renderProfileByWilayahChart(payload) {
   const labels = payload.chartProfileByWilayah?.wilayahLabels || [];
   const ds = payload.chartProfileByWilayah?.datasets || {};
 
-  // pastikan number
   const toNumArr = (a) => (a || []).map(x => Number(x));
 
   const data = {
@@ -143,28 +142,18 @@ function renderProfileByWilayahChart(payload) {
     ]
   };
 
-  if (profileChart) {
-    profileChart.data = data;
-    profileChart.update();
-    return;
-  }
+  if (profileChart) { profileChart.data = data; profileChart.update(); return; }
 
   profileChart = new Chart(ctx, {
     type: 'bar',
     data,
     options: {
       responsive: true,
-      scales: {
-        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } }
-      },
-      plugins: {
-        legend: { position: 'bottom' },
-        tooltip: { callbacks: { label: (c) => `${c.dataset.label} ${Number(c.parsed.y).toFixed(2)}%` } }
-      }
+      scales: { y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } } },
+      plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: (c) => `${c.dataset.label} ${Number(c.parsed.y).toFixed(2)}%` } } }
     }
   });
 }
-
 
 // =============================
 // Tabel

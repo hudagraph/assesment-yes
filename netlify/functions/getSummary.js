@@ -1,13 +1,7 @@
 // netlify/functions/getSummary.js
 import { createClient } from '@supabase/supabase-js';
 
-/**
- * KREDENSIAL SUPABASE
- * Untuk produksi sebaiknya pakai ENV, tapi untuk memudahkan sesuai setup kamu sekarang kita hardcode.
- * Jika nanti mau pindah ke ENV:
- * const SUPABASE_URL = process.env.SUPABASE_URL
- * const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_ANON_KEY
- */
+// NOTE: untuk produksi pindah ke ENV
 const SUPABASE_URL = 'https://dorppttdlqqtrjoastor.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvcnBwdHRkbHFxdHJqb2FzdG9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5MTQzOTQsImV4cCI6MjA3MjQ5MDM5NH0.tMC5JrzsdZHp3_eq0ifQPrYaks8XQstbhD6M1VmFHbI';
 
@@ -37,15 +31,15 @@ export async function handler(event) {
 
   try {
     const params = new URLSearchParams(event.queryStringParameters || {});
-    const periode = params.get('periode') || '';
-    const periode = rawPeriode.trim();
-    const wilayahFilter = params.get('wilayah') || ''; // opsional
-    const q = (params.get('q') || '').trim();          // opsional
-    const limit = Math.min(parseInt(params.get('limit') || '5000', 10), 50000);
+    const rawPeriode   = params.get('periode') || '';     // <-- perbaikan
+    const periode      = rawPeriode.trim();               // "" = Semua Periode
+    const wilayahFilter = params.get('wilayah') || '';
+    const q            = (params.get('q') || '').trim();
+    const limit        = Math.min(parseInt(params.get('limit') || '5000', 10), 50000);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // ---------- 0) Ambil daftar wilayah dari validasi_data (untuk filter & info KPI) ----------
+    // 0) Daftar wilayah dari validasi_data
     const { data: vdAll, error: vdErr } = await supabase
       .from('validasi_data')
       .select('wilayah, nama_pm, asesor');
@@ -60,12 +54,11 @@ export async function handler(event) {
     const wilayah_list = Array.from(allWilayahSet).sort();
     const allWilayahCount = wilayah_list.length;
 
-    // PM target sesuai filter wilayah (untuk KPI "Total dinilai dari total target")
     let targetRows = vdAll || [];
     if (wilayahFilter) targetRows = targetRows.filter(r => r.wilayah === wilayahFilter);
     const total_target_pm = targetRows.length;
 
-    // ---------- 1) Ambil ringkasan untuk TABEL + KPI (by periode & optional filter) ----------
+    // 1) Data utama untuk KPI + Tabel
     let sel = supabase
       .from('v_penilaian_summary')
       .select(
@@ -74,12 +67,11 @@ export async function handler(event) {
         'campus_preparation_pct, akhlak_mulia_pct, quranic_mentorship_pct, softskill_pct, leadership_pct, ' +
         'total_skor, total_pct, grade, created_at'
       )
-      .eq('periode', periode)
       .limit(limit);
 
-    if (periode) sel = sel.eq('periode', periode);   // <-- hanya filter kalau ada
-    if (wilayah) sel = sel.eq('wilayah', wilayah);
-    if (q) sel = sel.ilike('nama_pm', `%${q}%`);
+    if (periode)      sel = sel.eq('periode', periode);          // <-- hanya jika ada periode
+    if (wilayahFilter) sel = sel.eq('wilayah', wilayahFilter);    // <-- perbaikan nama var
+    if (q)            sel = sel.ilike('nama_pm', `%${q}%`);
 
     const { data: rows, error } = await sel;
     if (error) {
@@ -87,16 +79,15 @@ export async function handler(event) {
       return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
     }
 
-    // KPI
+    // KPI & rata-rata
     const kpis = {
-      count: 0,                // jumlah PM yang punya data sesuai filter
-      total_target_pm,         // dari validasi_data (sudah ada di kode kamu)
+      count: 0,                // jumlah PM unik (lintas periode pun OK)
+      total_target_pm,
       avg_total_pct: 0,
       avg_grade: '-',
       grade_counts: {},
     };
-    
-    // agregasi rata-rata sederhana across rows
+
     const sum = {
       campus_preparation_pct: 0,
       akhlak_mulia_pct: 0,
@@ -105,7 +96,7 @@ export async function handler(event) {
       leadership_pct: 0,
       total_pct: 0,
     };
-    
+
     rows.forEach(r => {
       sum.campus_preparation_pct += Number(r.campus_preparation_pct || 0);
       sum.akhlak_mulia_pct       += Number(r.akhlak_mulia_pct || 0);
@@ -113,16 +104,14 @@ export async function handler(event) {
       sum.softskill_pct          += Number(r.softskill_pct || 0);
       sum.leadership_pct         += Number(r.leadership_pct || 0);
       sum.total_pct              += Number(r.total_pct || 0);
-    
+
       const g = r.grade || 'Unknown';
       kpis.grade_counts[g] = (kpis.grade_counts[g] || 0) + 1;
     });
-    
-    // jika semua periode, kpis.count = jumlah PM unik; jika 1 periode, sama saja aman
+
     const uniquePM = new Set((rows || []).map(r => r.nama_pm).filter(Boolean));
     kpis.count = uniquePM.size;
-    
-    // rata-rata
+
     const denom = (rows.length || 1);
     const avgSections = {
       campus_preparation_pct: +(sum.campus_preparation_pct / denom).toFixed(2),
@@ -133,7 +122,7 @@ export async function handler(event) {
     };
     kpis.avg_total_pct = +(sum.total_pct / denom).toFixed(2);
     kpis.avg_grade = gradeFromPct(kpis.avg_total_pct);
-    
+
     const avgSectionsWithGrade = {
       campus_preparation: { pct: avgSections.campus_preparation_pct, grade: gradeFromPct(avgSections.campus_preparation_pct) },
       akhlak_mulia:       { pct: avgSections.akhlak_mulia_pct,       grade: gradeFromPct(avgSections.akhlak_mulia_pct) },
@@ -142,9 +131,8 @@ export async function handler(event) {
       leadership:         { pct: avgSections.leadership_pct,         grade: gradeFromPct(avgSections.leadership_pct) },
     };
 
-    // ---------- 2) Bar chart: perbandingan profil antar WILAYAH ----------
-    // Agregasi dari BARIS DATA (rows), bukan dari validasi_data
-    const sumsByWilayah = new Map(); // w -> {count, cp, am, qm, ss, ld}
+    // 2) Bar chart: perbandingan profil antar wilayah
+    const sumsByWilayah = new Map();
     (rows || []).forEach(r => {
       const w = (r.wilayah || '').trim() || '(Tanpa Wilayah)';
       if (!sumsByWilayah.has(w)) {
@@ -181,7 +169,7 @@ export async function handler(event) {
       compareDatasets.leadership_pct.push(avg(s?.ld || 0));
     });
 
-    // ---------- 3) Line chart: tren 4 periode (avg total_pct per periode) ----------
+    // 3) Line chart: tren 4 periode
     let trendSel = supabase
       .from('v_penilaian_summary')
       .select('periode, total_pct, wilayah, nama_pm')
@@ -201,16 +189,16 @@ export async function handler(event) {
       const items = (trendRows || []).filter(r => r.periode === label);
       if (!items.length) return 0;
       const sumPct = items.reduce((s, r) => s + Number(r.total_pct || 0), 0);
-      return + (sumPct / items.length).toFixed(2);
+      return +(sumPct / items.length).toFixed(2);
     });
 
-    // ---------- 4) Nama PM untuk autocomplete ----------
+    // 4) Autocomplete PM
     const pm_names = Array.from(new Set((rows || []).map(r => r.nama_pm).filter(Boolean))).sort();
 
-    // ---------- 5) Build payload (deklarasi dulu, baru boleh di-log!) ----------
+    // 5) Payload
     const payload = {
       apiVersion: 'chart-wilayah-v3',
-      periode,
+      periode, // "" = semua
       wilayah_list,
       meta: { all_wilayah_count: allWilayahCount, periods: PERIODES },
       kpis,
@@ -222,9 +210,8 @@ export async function handler(event) {
       rows
     };
 
-    // Log aman (tidak akses payload sebelum dideklarasikan)
     console.log('[getSummary] ok', {
-      periode,
+      periode: periode || '(all)',
       filterWilayah: wilayahFilter || '(all)',
       q: q || '(empty)',
       rows: rows.length,

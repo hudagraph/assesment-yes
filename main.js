@@ -397,29 +397,37 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ketika PM berubah, cek apakah sudah ada data untuk (wilayah, asesor, pm, periode)
   pmSelect.addEventListener('change', async () => {
-    const wilayah = wilayahSelect.value;
-    const asesor  = asesorField.value;
-    const pm      = pmSelect.value;
-    const periode = document.getElementById('periodeInput')?.value || '';
-  
-    if (!wilayah || !asesor || !pm || !periode) return;
-  
-    try {
-      const qs = new URLSearchParams({ wilayah, asesor, pm, periode });
-      const res = await fetch(`/.netlify/functions/checkExisting?${qs.toString()}`, { cache: 'no-store' });
-      const data = await res.json();
-      if (data.exists) {
-        const ok = confirm(`Data penilaian untuk ${pm} (${wilayah}, ${periode}) sudah ada.\nIngin UPDATE nilainya?`);
-        if (!ok) {
-          // batal: kembalikan ke "-- Pilih PM --"
-          pmSelect.value = '';
-        }
-        // kalau ok: biarkan user lanjut; submitForm kamu sudah upsert (lihat bagian 3)
+  const wilayah = wilayahSelect.value?.trim();
+  const asesor  = asesorField.value?.trim();
+  const pm      = pmSelect.value?.trim();
+  const periode = document.getElementById('periodeInput').value?.trim();
+
+  if (!wilayah || !asesor || !pm || !periode) return;
+
+  try {
+    const qs = new URLSearchParams({ wilayah, asesor, pm, periode });
+    const res = await fetch(`/.netlify/functions/checkExisting?${qs.toString()}`, { cache: 'no-store' });
+    const data = await res.json();
+
+    // tandai default: bukan update
+    pmSelect.dataset.updateMode = '0';
+
+    if (data?.exists) {
+      const msg = `Data penilaian untuk ${pm} (${wilayah}, ${periode}) sudah ada.\nIngin UPDATE nilainya?`;
+      const ok = await showConfirmModal(msg, { okText: 'Update', cancelText: 'Batal' });
+      if (ok) {
+        pmSelect.dataset.updateMode = '1';  // akan terbaca saat submit
+      } else {
+        // batalkan: kosongkan kembali pilihan PM
+        pmSelect.value = '';
       }
-    } catch (e) {
-      console.warn('checkExisting failed', e);
     }
-  });
+  } catch (e) {
+    console.error('checkExisting error:', e);
+    // optional: tampilkan toast ringan, tapi jangan pakai alert blocking
+  }
+});
+
   
   // kalau periode diubah, kita ulang cek saat PM dipilih lagi
   document.getElementById('periodeInput')?.addEventListener('change', () => {

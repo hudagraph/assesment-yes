@@ -6,51 +6,66 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 export async function handler(event) {
   try {
-    // GET only
-    if (event.httpMethod !== 'GET') {
-      return { statusCode: 405, body: 'Method Not Allowed' };
-    }
+    const params = new URLSearchParams(event.queryStringParameters || {});
+    const periode = (params.get('periode') || '').trim();
+    const includeAssessed = params.get('include_assessed') !== '0'; // default: true
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    const { data, error } = await supabase
+    // ambil master validasi
+    const { data: vdata, error } = await supabase
       .from('validasi_data')
-      .select('wilayah, asesor, nama_pm, status');
+      .select('wilayah, asesor, nama_pm');
+    if (error) throw error;
 
-    if (error) {
-      console.error('Supabase error getValidasi:', error);
-      return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
+    // bila includeAssessed = false, sembunyikan PM yang sudah dinilai pada periode tsb
+    let assessedSet = new Set();
+    if (!includeAssessed && periode) {
+      const { data: assessed, error: e2 } = await supabase
+        .from('penilaian_yes')
+        .select('wilayah, asesor, nama_pm')
+        .eq('periode', periode);
+      if (e2) throw e2;
+      (assessed || []).forEach(r => {
+        assessedSet.add(`${(r.wilayah||'').trim()}||${(r.asesor||'').trim()}||${(r.nama_pm||'').trim()}`);
+      });
     }
 
     const wilayahSet = new Set();
-    const asesorMap = new Map(); // wilayah -> Set(asesor)
-    const pmMap = new Map();     // `${wilayah}||${asesor}` -> [pm]
+    const asesorMap = {};   // { [wilayah]: [asesor1] }
+    const pmMap = {};       // { ["wilayah||asesor"]: [pm1, pm2] }
 
-    for (const row of data || []) {
-      wilayahSet.add(row.wilayah);
+    (vdata || []).forEach(r => {
+      const w = (r.wilayah || '').trim();
+      const a = (r.asesor || '').trim();
+      const p = (r.nama_pm || '').trim();
+      if (!w || !a || !p) return;
 
-      if (!asesorMap.has(row.wilayah)) asesorMap.set(row.wilayah, new Set());
-      asesorMap.get(row.wilayah).add(row.asesor);
+      wilayahSet.add(w);
+      if (!asesorMap[w]) asesorMap[w] = [];
+      if (!asesorMap[w].includes(a)) asesorMap[w].push(a);
 
-      const key = `${row.wilayah}||${row.asesor}`;
-      if (!pmMap.has(key)) pmMap.set(key, []);
-      // hanya tampilkan PM yang status-nya belum dinilai
-      if (row.status !== 'Sudah Dinilai') pmMap.get(key).push(row.nama_pm);
-    }
-
-    const payload = {
-      wilayah: Array.from(wilayahSet),
-      asesor: Object.fromEntries([...asesorMap].map(([k, v]) => [k, Array.from(v)])),
-      pm: Object.fromEntries(pmMap)
-    };
+      const key = `${w}||${a}`;
+      if (!pmMap[key]) pmMap[key] = [];
+      // skip jika diset untuk hide yang sudah dinilai
+      if (!includeAssessed && periode) {
+        const trip = `${w}||${a}||${p}`;
+        if (assessedSet.has(trip)) return;
+      }
+      pmMap[key].push(p);
+    });
 
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      body: JSON.stringify({
+        wilayah: Array.from(wilayahSet).sort(),
+        asesor: asesorMap,
+        pm: pmMap
+      })
     };
   } catch (err) {
-    console.error('getValidasi fatal:', err);
+    console.error('getValidasi error:', err);
     return { statusCode: 500, body: JSON.stringify({ error: 'Internal error' }) };
   }
 }

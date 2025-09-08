@@ -89,31 +89,30 @@
 
   <!-- Confirm Modal -->
   <div id="confirmModal" class="fixed inset-0 z-50 hidden">
-    <!-- backdrop -->
-    <div class="absolute inset-0 bg-black/40"></div>
-  
-    <!-- dialog -->
-    <div class="relative mx-auto mt-32 w-[90%] max-w-md rounded-2xl bg-white p-5 shadow-2xl">
-      <h3 id="confirmTitle" class="text-lg font-semibold text-gray-800">
-        Konfirmasi
-      </h3>
-      <p id="confirmMessage" class="mt-2 text-sm text-gray-600">
-        Apakah kamu yakin?
-      </p>
-  
-      <div class="mt-5 flex justify-end gap-2">
-        <button id="confirmCancel"
-                class="rounded-lg border px-4 py-2 text-gray-700 hover:bg-gray-50">
-          Batal
-        </button>
-        <button id="confirmOk"
-                class="rounded-lg bg-sky-600 px-4 py-2 font-semibold text-white hover:bg-sky-700">
-          Update
-        </button>
+    <!-- Backdrop -->
+    <div id="updateBackdrop" class="hidden fixed inset-0 bg-black/40 z-40"></div>
+    <!-- Modal Konfirmasi Update -->
+    <div id="updateModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-xl max-w-md w-full">
+        <div class="px-6 py-4 border-b">
+          <h3 class="text-lg font-semibold">Konfirmasi</h3>
+        </div>
+        <div class="px-6 py-4">
+          <p id="updateMessage" class="text-gray-700">
+            Data sudah ada. Ingin update nilainya?
+          </p>
+        </div>
+        <div class="px-6 py-4 border-t flex items-center justify-end gap-3">
+          <button id="updateNo"
+                  class="px-4 py-2 rounded-lg border bg-white hover:bg-gray-50">
+            Batal
+          </button>
+          <button id="updateYes"
+                  class="px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700">
+            Update
+          </button>
+        </div>
       </div>
     </div>
-  </div>
-
-
 </body>
 </html>

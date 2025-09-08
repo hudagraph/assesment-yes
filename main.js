@@ -169,13 +169,66 @@ function updateProgressAndSkor() {
   resultText.textContent = grade;
 }
 
+// ===== Modal helper (Promise-based) =====
+function showConfirmModal({ title, message, okText = 'Update', cancelText = 'Batal' }) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('confirmModal');
+    const $title = document.getElementById('confirmTitle');
+    const $msg = document.getElementById('confirmMessage');
+    const $ok = document.getElementById('confirmOk');
+    const $cancel = document.getElementById('confirmCancel');
+
+    $title.textContent = title || 'Konfirmasi';
+    $msg.textContent = message || 'Apakah kamu yakin?';
+    $ok.textContent = okText;
+    $cancel.textContent = cancelText;
+
+    const onClose = (val) => {
+      modal.classList.add('hidden');
+      $ok.removeEventListener('click', onOk);
+      $cancel.removeEventListener('click', onCancel);
+      modal.removeEventListener('click', onBackdrop);
+      resolve(val);
+    };
+
+    const onOk = () => onClose(true);
+    const onCancel = () => onClose(false);
+    const onBackdrop = (e) => {
+      if (e.target === modal) onClose(false);
+    };
+
+    $ok.addEventListener('click', onOk);
+    $cancel.addEventListener('click', onCancel);
+    modal.addEventListener('click', onBackdrop);
+
+    modal.classList.remove('hidden');
+  });
+}
+
+// ===== Cek apakah data sudah ada (by wilayah, asesor, pm, periode) =====
+async function checkExisting({ wilayah, asesor, pm, periode }) {
+  const qs = new URLSearchParams({
+    wilayah, asesor, pm, periode
+  });
+  const res = await fetch(`/.netlify/functions/checkExisting?${qs.toString()}`, { cache: 'no-store' });
+  if (!res.ok) return { exists: false };
+  return res.json(); // { exists: true/false, last_tanggal?, updated_at? }
+}
+
+
 // ========== SUBMIT ==========
 async function handleSubmit(e) {
   e.preventDefault();
 
   const nilai = allSelectEls.map(sel => sel.value);
   if (nilai.some(n => n === "")) {
-    alert("Semua skor wajib diisi!");
+    // ganti alert lama (opsional):
+    await showConfirmModal({
+      title: 'Skor belum lengkap',
+      message: 'Masih ada skor indikator yang kosong. Lengkapi semua skor (1–4) ya.',
+      okText: 'OK',
+      cancelText: 'Tutup'
+    });
     return;
   }
 
@@ -184,45 +237,42 @@ async function handleSubmit(e) {
   const payload = {
     pm: data.get("pm"),
     wilayah: data.get("wilayah"),
-    asesor: data.get("asesor"), // dari hidden input (opsi B)
+    asesor: asesorField.value,          // << penting: ambil dari elemen, bukan FormData
     periode: data.get("periode"),
     tanggal: data.get("tanggal"),
     nilai
   };
 
   if (!payload.wilayah || !payload.asesor || !payload.pm || !payload.periode || !payload.tanggal) {
-    alert("Semua field utama wajib diisi!");
+    await showConfirmModal({
+      title: 'Form belum lengkap',
+      message: 'Semua field utama (Wilayah, Asesor, PM, Periode, Tanggal) wajib diisi.',
+      okText: 'OK',
+      cancelText: 'Tutup'
+    });
     return;
   }
 
-  // >>> PRE-CHECK: apakah data sudah ada?
-  try {
-    const qs = new URLSearchParams({
-      wilayah: payload.wilayah,
-      asesor: payload.asesor,
-      pm: payload.pm,
-      periode: payload.periode
+  // ===== PRE-CHECK: sudah ada datanya? =====
+  const existInfo = await checkExisting({
+    wilayah: payload.wilayah,
+    asesor: payload.asesor,
+    pm: payload.pm,
+    periode: payload.periode
+  });
+
+  if (existInfo.exists) {
+    const ok = await showConfirmModal({
+      title: 'Data sudah ada',
+      message: `Nilai untuk PM "${payload.pm}" pada periode "${payload.periode}" sudah tersimpan.\n` +
+               `Ingin mengUPDATE data tersebut?`,
+      okText: 'Lanjut Update',
+      cancelText: 'Batal'
     });
-    const cek = await fetch(`/.netlify/functions/checkEntry?${qs.toString()}`, { cache: 'no-store' });
-    const cekJson = await cek.json().catch(() => ({}));
-    if (cek.ok && cekJson.exists) {
-      const ok = confirm(
-        `Data untuk:
-- Wilayah: ${payload.wilayah}
-- Asesor: ${payload.asesor}
-- PM: ${payload.pm}
-- Periode: ${payload.periode}
-
-SUDAH ADA.
-Apakah Anda ingin MENGUPDATE data ini?`
-      );
-      if (!ok) return; // batal submit
-    }
-  } catch (e) {
-    console.warn('Gagal pre-check, lanjut submit sebagai upsert.', e);
+    if (!ok) return; // batal kirim
   }
-  // <<< PRE-CHECK SELESAI
 
+  // ===== kirim seperti biasa (submitForm sudah UPSERT) =====
   overlaySpinner.style.display = "flex";
   try {
     const res = await fetch("/.netlify/functions/submitForm", {
@@ -235,23 +285,30 @@ Apakah Anda ingin MENGUPDATE data ini?`
 
     if (!res.ok) throw new Error(result.error || `Gagal menyimpan (status ${res.status})`);
 
-    // sukses → reset
+    // Sukses → reset
     form.reset();
     allSelectEls.forEach(sel => (sel.value = ""));
     updateProgressAndSkor();
-
     pmSelect.innerHTML = '<option value="">-- Pilih PM --</option>';
     pmSelect.disabled = true;
 
-    // opsional: tampilkan pesan sesuai kondisi pre-check
-    alert((result.rows && result.rows > 0) ? "Data berhasil disimpan/diupdate." : "Data berhasil disimpan.");
+    await showConfirmModal({
+      title: 'Berhasil',
+      message: 'Data berhasil disimpan/diupdate.',
+      okText: 'OK',
+      cancelText: 'Tutup'
+    });
   } catch (err) {
     overlaySpinner.style.display = "none";
     console.error("Submit error:", err);
-    alert("Gagal menyimpan: " + err.message);
+    await showConfirmModal({
+      title: 'Gagal',
+      message: 'Gagal menyimpan: ' + err.message,
+      okText: 'OK',
+      cancelText: 'Tutup'
+    });
   }
 }
-
 
 // ========== INIT ==========
 document.addEventListener("DOMContentLoaded", async () => {

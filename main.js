@@ -25,6 +25,50 @@ const collapseContainer = document.getElementById("collapseSections");
 
 let allSelectEls = []; // select skor untuk 62 indikator
 
+// ======= CONFIRM MODAL (pengganti window.confirm) =======
+function showConfirmModal(message, { okText = 'Update', cancelText = 'Batal' } = {}) {
+  return new Promise((resolve) => {
+    const modal      = document.getElementById('updateModal');
+    const msgEl      = document.getElementById('updateMessage');
+    const okBtn      = document.getElementById('updateYes');
+    const cancelBtn  = document.getElementById('updateNo');
+    const backdrop   = document.getElementById('updateBackdrop');
+
+    if (!modal || !msgEl || !okBtn || !cancelBtn) {
+      // fallback kalau HTML modal belum ada
+      const ok = window.confirm(message);
+      resolve(ok);
+      return;
+    }
+
+    msgEl.textContent = message;
+    okBtn.textContent = okText;
+    cancelBtn.textContent = cancelText;
+
+    // buka modal
+    modal.classList.remove('hidden');
+    backdrop?.classList.remove('hidden');
+
+    const cleanup = () => {
+      modal.classList.add('hidden');
+      backdrop?.classList.add('hidden');
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      backdrop?.removeEventListener('click', onCancel);
+      document.removeEventListener('keydown', onEsc);
+    };
+
+    const onOk = () => { cleanup(); resolve(true); };
+    const onCancel = () => { cleanup(); resolve(false); };
+    const onEsc = (e) => { if (e.key === 'Escape') onCancel(); };
+
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+    backdrop?.addEventListener('click', onCancel);
+    document.addEventListener('keydown', onEsc);
+  });
+}
+
 // ========== API HELPERS ==========
 async function getValidasiData() {
   try {

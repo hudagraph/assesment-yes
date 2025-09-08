@@ -87,32 +87,23 @@
   <!-- Load main.js -->
   <script src="main.js" defer></script>
 
-  <!-- Confirm Modal -->
-  <div id="confirmModal" class="fixed inset-0 z-50 hidden">
-    <!-- Backdrop -->
-    <div id="updateBackdrop" class="hidden fixed inset-0 bg-black/40 z-40"></div>
-    <!-- Modal Konfirmasi Update -->
-    <div id="updateModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div class="bg-white rounded-2xl shadow-xl max-w-md w-full">
-        <div class="px-6 py-4 border-b">
-          <h3 class="text-lg font-semibold">Konfirmasi</h3>
-        </div>
-        <div class="px-6 py-4">
-          <p id="updateMessage" class="text-gray-700">
-            Data sudah ada. Ingin update nilainya?
-          </p>
-        </div>
-        <div class="px-6 py-4 border-t flex items-center justify-end gap-3">
-          <button id="updateNo"
-                  class="px-4 py-2 rounded-lg border bg-white hover:bg-gray-50">
-            Batal
-          </button>
-          <button id="updateYes"
-                  class="px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700">
-            Update
-          </button>
-        </div>
+  <!-- Confirm Modal (shared) -->
+  <div id="updateBackdrop" class="hidden fixed inset-0 bg-black/40 z-40"></div>
+  <div id="updateModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl max-w-md w-full">
+      <div class="px-6 py-4 border-b">
+        <h3 id="updateTitle" class="text-lg font-semibold">Konfirmasi</h3>
+      </div>
+      <div class="px-6 py-4">
+        <p id="updateMessage" class="text-gray-700">Apakah kamu yakin?</p>
+      </div>
+      <div class="px-6 py-4 border-t flex items-center justify-end gap-3">
+        <button id="updateNo" class="px-4 py-2 rounded-lg border bg-white hover:bg-gray-50">Batal</button>
+        <button id="updateYes" class="px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700">OK</button>
       </div>
     </div>
+  </div>
+
+  
 </body>
 </html>

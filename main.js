@@ -1,4 +1,5 @@
-// main.js (frontend Netlify + Supabase)
+// main.js — Form Penilaian YES 2025
+// ===============================================================
 
 // ========== KONFIGURASI KELOMPOK INDIKATOR (jumlah total 62) ==========
 const indikatorData = [
@@ -11,9 +12,9 @@ const indikatorData = [
 
 // ========== ELEMEN DOM ==========
 const wilayahSelect  = document.getElementById("wilayahSelect");
-const asesorField    = document.getElementById("asesorField");
+const asesorField    = document.getElementById("asesorField");  // <select disabled, hanya display>
+const asesorHidden   = document.getElementById("asesorHidden");  // <input type="hidden" name="asesor">
 const pmSelect       = document.getElementById("pmSelect");
-const asesorHidden   = document.getElementById("asesorHidden");
 
 const progressBar    = document.getElementById("progressBar");
 const filledCount    = document.getElementById("filledCount");
@@ -25,67 +26,122 @@ const collapseContainer = document.getElementById("collapseSections");
 
 let allSelectEls = []; // select skor untuk 62 indikator
 
-// ======= CONFIRM MODAL (pengganti window.confirm) =======
-function showConfirmModal(message, { okText = 'Update', cancelText = 'Batal' } = {}) {
+// ===============================================================
+//  Modal Konfirmasi (unified) — bisa dipanggil pakai STRING atau OBJECT
+//  - showConfirmModal("pesan", {title?, okText?, cancelText?})
+//  - showConfirmModal({title, message, okText, cancelText})
+//  Auto-create DOM jika belum ada (anti-null).
+// ===============================================================
+function ensureModalDOM() {
+  if (document.getElementById('updateModal')) return;
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'updateBackdrop';
+  backdrop.className = 'fixed inset-0 bg-black/40 z-40 hidden';
+  document.body.appendChild(backdrop);
+
+  const wrap = document.createElement('div');
+  wrap.id = 'updateModal';
+  wrap.className = 'fixed inset-0 z-50 flex items-center justify-center p-4 hidden';
+  wrap.innerHTML = `
+    <div class="bg-white rounded-2xl shadow-xl max-w-md w-full">
+      <div class="px-6 py-4 border-b">
+        <h3 id="updateTitle" class="text-lg font-semibold">Konfirmasi</h3>
+      </div>
+      <div class="px-6 py-4">
+        <p id="updateMessage" class="text-gray-700">Apakah kamu yakin?</p>
+      </div>
+      <div class="px-6 py-4 border-t flex items-center justify-end gap-3">
+        <button id="updateNo" class="px-4 py-2 rounded-lg border bg-white hover:bg-gray-50">Batal</button>
+        <button id="updateYes" class="px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700">OK</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+}
+
+function showConfirmModal(arg, opts = {}) {
   return new Promise((resolve) => {
-    const modal      = document.getElementById('updateModal');
-    const msgEl      = document.getElementById('updateMessage');
-    const okBtn      = document.getElementById('updateYes');
-    const cancelBtn  = document.getElementById('updateNo');
-    const backdrop   = document.getElementById('updateBackdrop');
+    ensureModalDOM();
 
-    if (!modal || !msgEl || !okBtn || !cancelBtn) {
-      // fallback kalau HTML modal belum ada
-      const ok = window.confirm(message);
-      resolve(ok);
-      return;
-    }
+    const modal    = document.getElementById('updateModal');
+    const titleEl  = document.getElementById('updateTitle');
+    const msgEl    = document.getElementById('updateMessage');
+    const okBtn    = document.getElementById('updateYes');
+    const cancelBt = document.getElementById('updateNo');
+    const backdrop = document.getElementById('updateBackdrop');
 
-    msgEl.textContent = message;
-    okBtn.textContent = okText;
-    cancelBtn.textContent = cancelText;
+    const isString = typeof arg === 'string';
+    const title    = isString ? (opts.title || 'Konfirmasi')  : (arg.title   || 'Konfirmasi');
+    const message  = isString ? arg                           : (arg.message || 'Apakah kamu yakin?');
+    const okText   = isString ? (opts.okText || 'OK')         : (arg.okText  || 'OK');
+    const noText   = isString ? (opts.cancelText || 'Batal')  : (arg.cancelText || 'Batal');
 
-    // buka modal
-    modal.classList.remove('hidden');
-    backdrop?.classList.remove('hidden');
+    if (titleEl)  titleEl.textContent = title;
+    if (msgEl)    msgEl.textContent   = message;
+    if (okBtn)    okBtn.textContent   = okText;
+    if (cancelBt) cancelBt.textContent= noText;
 
-    const cleanup = () => {
+    const open = () => {
+      modal.classList.remove('hidden');
+      backdrop?.classList.remove('hidden');
+    };
+    const close = () => {
       modal.classList.add('hidden');
       backdrop?.classList.add('hidden');
-      okBtn.removeEventListener('click', onOk);
-      cancelBtn.removeEventListener('click', onCancel);
+    };
+
+    const cleanup = () => {
+      okBtn?.removeEventListener('click', onOk);
+      cancelBt?.removeEventListener('click', onCancel);
       backdrop?.removeEventListener('click', onCancel);
       document.removeEventListener('keydown', onEsc);
     };
-
-    const onOk = () => { cleanup(); resolve(true); };
-    const onCancel = () => { cleanup(); resolve(false); };
+    const onOk = () => { cleanup(); close(); resolve(true); };
+    const onCancel = () => { cleanup(); close(); resolve(false); };
     const onEsc = (e) => { if (e.key === 'Escape') onCancel(); };
 
-    okBtn.addEventListener('click', onOk);
-    cancelBtn.addEventListener('click', onCancel);
+    okBtn?.addEventListener('click', onOk);
+    cancelBt?.addEventListener('click', onCancel);
     backdrop?.addEventListener('click', onCancel);
     document.addEventListener('keydown', onEsc);
+
+    open();
   });
 }
 
-// ========== API HELPERS ==========
+// ===============================================================
+//  API Helpers
+// ===============================================================
 async function getValidasiData() {
   try {
     const periodeNow = document.getElementById('periodeInput')?.value || '';
     const qs = new URLSearchParams();
     if (periodeNow) qs.set('periode', periodeNow);
-    qs.set('include_assessed', '1'); // <- tampilkan semua
+    qs.set('include_assessed', '1'); // tampilkan semua PM (baik yg sudah dinilai maupun belum)
     const res = await fetch(`/.netlify/functions/getValidasi?${qs.toString()}`, { cache: "no-store" });
     if (!res.ok) throw new Error(`Status ${res.status}`);
-    return await res.json();
+    return await res.json(); // { wilayah:[], asesor:{wilayah:[asesor]}, pm:{'wilayah||asesor':[pm]} }
   } catch (err) {
     console.error("Gagal memuat getValidasi:", err);
     return { wilayah: [], asesor: {}, pm: {} };
   }
 }
 
-// ========== RENDER HELPERS ==========
+async function checkExisting({ wilayah, asesor, pm, periode }) {
+  try {
+    const qs = new URLSearchParams({ wilayah, asesor, pm, periode });
+    const res = await fetch(`/.netlify/functions/checkExisting?${qs.toString()}`, { cache: 'no-store' });
+    if (!res.ok) return { exists: false };
+    return await res.json(); // { exists, last_tanggal?, created_at? }
+  } catch (e) {
+    console.error('checkExisting error:', e);
+    return { exists: false };
+  }
+}
+
+// ===============================================================
+//  Render Helpers
+// ===============================================================
 function renderDropdownWilayah(wilayahList = []) {
   wilayahSelect.innerHTML = '<option value="">-- Pilih Wilayah --</option>';
   wilayahList.forEach(w => {
@@ -97,6 +153,7 @@ function renderDropdownWilayah(wilayahList = []) {
 }
 
 function renderAsesorField(wilayah, asesorMap = {}) {
+  // Tiap wilayah hanya 1 asesor → auto-isi & disabled
   const list = asesorMap[wilayah] || [];
   const asesor = list.length ? list[0] : "";
 
@@ -110,7 +167,7 @@ function renderAsesorField(wilayah, asesorMap = {}) {
   }
   asesorField.disabled = true;
 
-  // >>> penting: sinkronkan ke input hidden supaya ikut terkirim
+  // Sync ke hidden agar ikut terkirim saat submit
   if (asesorHidden) asesorHidden.value = asesor || "";
 }
 
@@ -191,7 +248,9 @@ function renderIndikatorTable(indikatorList) {
   });
 }
 
-// ========== PROGRESS & SKOR ==========
+// ===============================================================
+//  Progress & Skor
+// ===============================================================
 function updateProgressAndSkor() {
   const nilai = allSelectEls.map(sel => parseInt(sel.value, 10) || 0);
   const terisi = allSelectEls.filter(sel => sel.value).length;
@@ -213,60 +272,14 @@ function updateProgressAndSkor() {
   resultText.textContent = grade;
 }
 
-// ===== Modal helper (Promise-based) =====
-function showConfirmModal({ title, message, okText = 'Update', cancelText = 'Batal' }) {
-  return new Promise((resolve) => {
-    const modal = document.getElementById('confirmModal');
-    const $title = document.getElementById('confirmTitle');
-    const $msg = document.getElementById('confirmMessage');
-    const $ok = document.getElementById('confirmOk');
-    const $cancel = document.getElementById('confirmCancel');
-
-    $title.textContent = title || 'Konfirmasi';
-    $msg.textContent = message || 'Apakah kamu yakin?';
-    $ok.textContent = okText;
-    $cancel.textContent = cancelText;
-
-    const onClose = (val) => {
-      modal.classList.add('hidden');
-      $ok.removeEventListener('click', onOk);
-      $cancel.removeEventListener('click', onCancel);
-      modal.removeEventListener('click', onBackdrop);
-      resolve(val);
-    };
-
-    const onOk = () => onClose(true);
-    const onCancel = () => onClose(false);
-    const onBackdrop = (e) => {
-      if (e.target === modal) onClose(false);
-    };
-
-    $ok.addEventListener('click', onOk);
-    $cancel.addEventListener('click', onCancel);
-    modal.addEventListener('click', onBackdrop);
-
-    modal.classList.remove('hidden');
-  });
-}
-
-// ===== Cek apakah data sudah ada (by wilayah, asesor, pm, periode) =====
-async function checkExisting({ wilayah, asesor, pm, periode }) {
-  const qs = new URLSearchParams({
-    wilayah, asesor, pm, periode
-  });
-  const res = await fetch(`/.netlify/functions/checkExisting?${qs.toString()}`, { cache: 'no-store' });
-  if (!res.ok) return { exists: false };
-  return res.json(); // { exists: true/false, last_tanggal?, updated_at? }
-}
-
-
-// ========== SUBMIT ==========
+// ===============================================================
+//  Submit
+// ===============================================================
 async function handleSubmit(e) {
   e.preventDefault();
 
   const nilai = allSelectEls.map(sel => sel.value);
   if (nilai.some(n => n === "")) {
-    // ganti alert lama (opsional):
     await showConfirmModal({
       title: 'Skor belum lengkap',
       message: 'Masih ada skor indikator yang kosong. Lengkapi semua skor (1–4) ya.',
@@ -281,7 +294,7 @@ async function handleSubmit(e) {
   const payload = {
     pm: data.get("pm"),
     wilayah: data.get("wilayah"),
-    asesor: asesorField.value,          // << penting: ambil dari elemen, bukan FormData
+    asesor: asesorHidden?.value || asesorField?.value || "",   // pastikan terisi
     periode: data.get("periode"),
     tanggal: data.get("tanggal"),
     nilai
@@ -297,7 +310,7 @@ async function handleSubmit(e) {
     return;
   }
 
-  // ===== PRE-CHECK: sudah ada datanya? =====
+  // Pre-check lagi sebelum kirim (double safety)
   const existInfo = await checkExisting({
     wilayah: payload.wilayah,
     asesor: payload.asesor,
@@ -308,15 +321,14 @@ async function handleSubmit(e) {
   if (existInfo.exists) {
     const ok = await showConfirmModal({
       title: 'Data sudah ada',
-      message: `Nilai untuk PM "${payload.pm}" pada periode "${payload.periode}" sudah tersimpan.\n` +
-               `Ingin mengUPDATE data tersebut?`,
+      message: `Nilai untuk PM "${payload.pm}" pada periode "${payload.periode}" sudah tersimpan.\nIngin mengUPDATE data tersebut?`,
       okText: 'Lanjut Update',
       cancelText: 'Batal'
     });
-    if (!ok) return; // batal kirim
+    if (!ok) return;
   }
 
-  // ===== kirim seperti biasa (submitForm sudah UPSERT) =====
+  // Kirim (submitForm melakukan UPSERT)
   overlaySpinner.style.display = "flex";
   try {
     const res = await fetch("/.netlify/functions/submitForm", {
@@ -354,9 +366,11 @@ async function handleSubmit(e) {
   }
 }
 
-// ========== INIT ==========
+// ===============================================================
+//  INIT — Orkestrasi
+// ===============================================================
 document.addEventListener("DOMContentLoaded", async () => {
-  // set default tanggal = hari ini
+  // Default tanggal = hari ini
   const tanggalInput = document.querySelector('input[name="tanggal"]');
   if (tanggalInput) tanggalInput.value = new Date().toISOString().split("T")[0];
 
@@ -364,91 +378,78 @@ document.addEventListener("DOMContentLoaded", async () => {
   const data = await getValidasiData();
   renderDropdownWilayah(data.wilayah);
 
-  // Event: pilih Wilayah → auto isi Asesor (display), sinkron ke hidden, lalu render PM
+  // Pilih Wilayah → auto isi Asesor, sync hidden, render PM
   wilayahSelect.addEventListener("change", () => {
     const asesorGroup = document.getElementById("asesorGroup");
     const wilayah = wilayahSelect.value?.trim() || "";
-  
-    // jika user mengosongkan wilayah
+
     if (!wilayah) {
-      // sembunyikan grup asesor & kosongkan semuanya
+      // kosongkan jika wilayah dihapus
       if (asesorGroup) asesorGroup.classList.add("hidden");
       asesorField.innerHTML = '<option value="">-- Pilih Asesor --</option>';
       asesorField.disabled = true;
       if (asesorHidden) asesorHidden.value = "";
-  
       pmSelect.innerHTML = '<option value="">-- Pilih PM --</option>';
       pmSelect.disabled = true;
       return;
     }
-  
-    // isi asesor (otomatis 1 asesor per wilayah)
+
+    // Auto isi asesor
     renderAsesorField(wilayah, data.asesor);
     if (asesorGroup) asesorGroup.classList.remove("hidden");
-  
-    // sinkronkan ke input hidden supaya ikut terkirim saat submit
+
+    // Sinkronkan ke hidden
     const asesor = asesorField.value || "";
     if (asesorHidden) asesorHidden.value = asesor;
-  
-    // render daftar PM utk (wilayah, asesor)
+
+    // Render daftar PM utk pasangan (wilayah, asesor)
     pmSelect.innerHTML = '<option value="">-- Pilih PM --</option>';
-    renderDropdownPM(wilayah, asesor, data.pm); // ini juga otomatis set disabled kalau list kosong
+    renderDropdownPM(wilayah, asesor, data.pm);
   });
 
-  // ketika PM berubah, cek apakah sudah ada data untuk (wilayah, asesor, pm, periode)
+  // Saat PM dipilih → cek existing & tawarkan update
   pmSelect.addEventListener('change', async () => {
-  const wilayah = wilayahSelect.value?.trim();
-  const asesor  = asesorField.value?.trim();
-  const pm      = pmSelect.value?.trim();
-  const periode = document.getElementById('periodeInput').value?.trim();
+    const wilayah = wilayahSelect.value?.trim();
+    const asesor  = (asesorHidden?.value || asesorField.value || "").trim();
+    const pm      = pmSelect.value?.trim();
+    const periode = document.getElementById('periodeInput').value?.trim();
 
-  if (!wilayah || !asesor || !pm || !periode) return;
+    if (!wilayah || !asesor || !pm || !periode) return;
 
-  try {
-    const qs = new URLSearchParams({ wilayah, asesor, pm, periode });
-    const res = await fetch(`/.netlify/functions/checkExisting?${qs.toString()}`, { cache: 'no-store' });
-    const data = await res.json();
-
-    // tandai default: bukan update
-    pmSelect.dataset.updateMode = '0';
-
-    if (data?.exists) {
-      const msg = `Data penilaian untuk ${pm} (${wilayah}, ${periode}) sudah ada.\nIngin UPDATE nilainya?`;
-      const ok = await showConfirmModal(msg, { okText: 'Update', cancelText: 'Batal' });
-      if (ok) {
-        pmSelect.dataset.updateMode = '1';  // akan terbaca saat submit
-      } else {
-        // batalkan: kosongkan kembali pilihan PM
-        pmSelect.value = '';
+    try {
+      const info = await checkExisting({ wilayah, asesor, pm, periode });
+      if (info?.exists) {
+        const ok = await showConfirmModal(
+          `Data penilaian untuk ${pm} (${wilayah}, ${periode}) sudah ada.\nIngin UPDATE nilainya?`,
+          { okText: 'Update', cancelText: 'Batal' }
+        );
+        if (!ok) {
+          pmSelect.value = ''; // batalkan pilihan
+        }
       }
+    } catch (e) {
+      console.error('checkExisting error:', e);
+      // boleh tampilkan toast ringan di sini bila mau
     }
-  } catch (e) {
-    console.error('checkExisting error:', e);
-    // optional: tampilkan toast ringan, tapi jangan pakai alert blocking
-  }
-});
+  });
 
-  
-  // kalau periode diubah, kita ulang cek saat PM dipilih lagi
+  // Jika periode diganti, dan PM sudah terpilih → ulangi check
   document.getElementById('periodeInput')?.addEventListener('change', () => {
     if (pmSelect.value) {
-      const ev = new Event('change');
-      pmSelect.dispatchEvent(ev);
+      pmSelect.dispatchEvent(new Event('change'));
     }
   });
 
-
-  // Render indikator (ambil dari file indikator.json agar modular)
+  // Render indikator (dari indikator.json)
   try {
     const indikatorList = await fetch("indikator.json", { cache: "no-store" }).then(r => r.json());
     renderIndikatorTable(indikatorList);
   } catch (err) {
     console.error("Gagal memuat indikator.json:", err);
-    // fallback minimal kalau file tak ditemukan
     renderIndikatorTable([]);
   }
   updateProgressAndSkor();
 
-  // Event submit
+  // Submit
   document.getElementById("penilaianForm").addEventListener("submit", handleSubmit);
 });

@@ -86,5 +86,34 @@
 
   <!-- Load main.js -->
   <script src="main.js" defer></script>
+
+  <!-- Confirm Modal -->
+  <div id="confirmModal" class="fixed inset-0 z-50 hidden">
+    <!-- backdrop -->
+    <div class="absolute inset-0 bg-black/40"></div>
+  
+    <!-- dialog -->
+    <div class="relative mx-auto mt-32 w-[90%] max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+      <h3 id="confirmTitle" class="text-lg font-semibold text-gray-800">
+        Konfirmasi
+      </h3>
+      <p id="confirmMessage" class="mt-2 text-sm text-gray-600">
+        Apakah kamu yakin?
+      </p>
+  
+      <div class="mt-5 flex justify-end gap-2">
+        <button id="confirmCancel"
+                class="rounded-lg border px-4 py-2 text-gray-700 hover:bg-gray-50">
+          Batal
+        </button>
+        <button id="confirmOk"
+                class="rounded-lg bg-sky-600 px-4 py-2 font-semibold text-white hover:bg-sky-700">
+          Update
+        </button>
+      </div>
+    </div>
+  </div>
+
+
 </body>
 </html>

@@ -294,6 +294,40 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderDropdownPM(wilayah, asesor, data.pm); // ini juga otomatis set disabled kalau list kosong
   });
 
+  // ketika PM berubah, cek apakah sudah ada data untuk (wilayah, asesor, pm, periode)
+  pmSelect.addEventListener('change', async () => {
+    const wilayah = wilayahSelect.value;
+    const asesor  = asesorField.value;
+    const pm      = pmSelect.value;
+    const periode = document.getElementById('periodeInput')?.value || '';
+  
+    if (!wilayah || !asesor || !pm || !periode) return;
+  
+    try {
+      const qs = new URLSearchParams({ wilayah, asesor, pm, periode });
+      const res = await fetch(`/.netlify/functions/checkExisting?${qs.toString()}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data.exists) {
+        const ok = confirm(`Data penilaian untuk ${pm} (${wilayah}, ${periode}) sudah ada.\nIngin UPDATE nilainya?`);
+        if (!ok) {
+          // batal: kembalikan ke "-- Pilih PM --"
+          pmSelect.value = '';
+        }
+        // kalau ok: biarkan user lanjut; submitForm kamu sudah upsert (lihat bagian 3)
+      }
+    } catch (e) {
+      console.warn('checkExisting failed', e);
+    }
+  });
+  
+  // kalau periode diubah, kita ulang cek saat PM dipilih lagi
+  document.getElementById('periodeInput')?.addEventListener('change', () => {
+    if (pmSelect.value) {
+      const ev = new Event('change');
+      pmSelect.dispatchEvent(ev);
+    }
+  });
+
 
   // Render indikator (ambil dari file indikator.json agar modular)
   try {

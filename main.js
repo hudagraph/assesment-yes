@@ -28,9 +28,13 @@ let allSelectEls = []; // select skor untuk 62 indikator
 // ========== API HELPERS ==========
 async function getValidasiData() {
   try {
-    const res = await fetch("/.netlify/functions/getValidasi", { cache: "no-store" });
+    const periodeNow = document.getElementById('periodeInput')?.value || '';
+    const qs = new URLSearchParams();
+    if (periodeNow) qs.set('periode', periodeNow);
+    qs.set('include_assessed', '1'); // <- tampilkan semua
+    const res = await fetch(`/.netlify/functions/getValidasi?${qs.toString()}`, { cache: "no-store" });
     if (!res.ok) throw new Error(`Status ${res.status}`);
-    return await res.json(); // { wilayah:[], asesor:{[wilayah]:[asesor]}, pm:{["wilayah||asesor"]:[pm]} }
+    return await res.json();
   } catch (err) {
     console.error("Gagal memuat getValidasi:", err);
     return { wilayah: [], asesor: {}, pm: {} };

@@ -1,3 +1,4 @@
+// netlify/functions/checkExisting.js
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = 'https://dorppttdlqqtrjoastor.supabase.co';
@@ -5,35 +6,48 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 export async function handler(event) {
   try {
-    const params = new URLSearchParams(event.queryStringParameters || {});
-    const wilayah = (params.get('wilayah') || '').trim();
-    const asesor  = (params.get('asesor')  || '').trim();
-    const nama_pm = (params.get('pm')      || '').trim();
-    const periode = (params.get('periode') || '').trim();
+    if (event.httpMethod !== 'GET') {
+      return { statusCode: 405, body: 'Method Not Allowed' };
+    }
 
-    if (!wilayah || !asesor || !nama_pm || !periode) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'missing params' }) };
+    const p = new URLSearchParams(event.queryStringParameters || {});
+    const wilayah = (p.get('wilayah') || '').trim();
+    const asesor  = (p.get('asesor')  || '').trim();
+    const pm      = (p.get('pm')      || '').trim();
+    const periode = (p.get('periode') || '').trim();
+
+    if (!wilayah || !asesor || !pm || !periode) {
+      return { statusCode: 200, body: JSON.stringify({ exists: false }) };
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
     const { data, error } = await supabase
       .from('penilaian_yes')
-      .select('id, tanggal, created_at')
+      .select('id, tanggal, updated_at')
       .eq('wilayah', wilayah)
       .eq('asesor', asesor)
-      .eq('nama_pm', nama_pm)
+      .eq('nama_pm', pm)
       .eq('periode', periode)
       .limit(1);
 
-    if (error) throw error;
+    if (error) {
+      console.error('checkExisting error:', error);
+      return { statusCode: 500, body: JSON.stringify({ exists: false }) };
+    }
 
+    const row = (data && data[0]) || null;
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-      body: JSON.stringify({ exists: (data && data.length > 0), last: data?.[0] || null })
+      body: JSON.stringify({
+        exists: !!row,
+        last_tanggal: row?.tanggal || null,
+        updated_at: row?.updated_at || null
+      })
     };
   } catch (err) {
-    console.error('checkExisting error:', err);
-    return { statusCode: 500, body: JSON.stringify({ error: 'Internal error' }) };
+    console.error('checkExisting fatal:', err);
+    return { statusCode: 500, body: JSON.stringify({ exists: false }) };
   }
 }

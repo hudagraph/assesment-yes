@@ -22,9 +22,10 @@ export async function handler(event) {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+    // HAPUS updated_at karena tidak ada di tabel kamu
     const { data, error } = await supabase
       .from('penilaian_yes')
-      .select('id, tanggal, updated_at')
+      .select('id, tanggal, created_at')
       .eq('wilayah', wilayah)
       .eq('asesor', asesor)
       .eq('nama_pm', pm)
@@ -32,8 +33,8 @@ export async function handler(event) {
       .limit(1);
 
     if (error) {
-      console.error('checkExisting error:', error);
-      return { statusCode: 500, body: JSON.stringify({ exists: false }) };
+      console.error('checkExisting select error:', error);
+      return { statusCode: 500, body: JSON.stringify({ exists: false, error: error.message }) };
     }
 
     const row = (data && data[0]) || null;
@@ -43,11 +44,11 @@ export async function handler(event) {
       body: JSON.stringify({
         exists: !!row,
         last_tanggal: row?.tanggal || null,
-        updated_at: row?.updated_at || null
+        created_at: row?.created_at || null
       })
     };
   } catch (err) {
     console.error('checkExisting fatal:', err);
-    return { statusCode: 500, body: JSON.stringify({ exists: false }) };
+    return { statusCode: 500, body: JSON.stringify({ exists: false, error: 'Internal error' }) };
   }
 }
